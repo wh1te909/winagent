@@ -1,0 +1,10 @@
+.pytest_cache
+.vscode
+env
+extras
+Output
+__pycache__
+build
+dist
+*.spec
+checkrunner.txt

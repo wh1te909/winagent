@@ -1,0 +1,6 @@
+master_tries: -1
+keysize: 2048
+multiprocessing: True
+grains_cache: True
+grains_refresh_every: 180
+grains_cache_expiration: 86400
