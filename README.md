@@ -1,5 +1,7 @@
 # Tactical RMM Windows Agent
 
+[![Build Status](https://travis-ci.com/wh1te909/winagent.svg?branch=master)](https://travis-ci.com/wh1te909/winagent)
+
 #### Building (powershell, python3.7)
 
 ```commandline
