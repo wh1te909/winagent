@@ -21,38 +21,44 @@ def main():
     plat = platform.system().lower()
     plat_release = winutils.get_platform_release()
 
+    headers = {
+        "content-type": "application/json",
+        "Authorization": f"Token {astor.token}"
+    }
+
+    info = {
+        "agentid": astor.agentid,
+        "hostname": hostname,
+        "operating_system": operating_system,
+        "total_ram": total_ram,
+        "cpu_info": cpu_info,
+        "platform": plat,
+        "platform_release": plat_release
+    }
+
+    try:
+        update_url = f"{astor.server}/api/v1/update/"
+        requests.patch(update_url, json.dumps(info), headers=headers)
+    except Exception:
+        pass
+
 
     while 1:
         try:
             payload = {
                 "agentid": astor.agentid,
-                "client": astor.client,
-                "site": astor.site,
-                "mesh_node_id": astor.mesh_node_id,
-                "description": astor.description,
-                "monitoring_type": astor.agent_type,
-                "operating_system": operating_system,
-                "hostname": hostname,
                 "local_ip": winutils.get_cmd_output("ipconfig /all"),
                 "services": winutils.get_services(),
                 "public_ip": winutils.get_public_ip(),
                 "cpu_load": winutils.get_cpu_load(),
-                "total_ram": total_ram,
                 "used_ram": winutils.get_used_ram(),
                 "disks": winutils.get_disks(),
                 "boot_time": winutils.get_boot_time(),
-                "logged_in_username": winutils.get_logged_on_user(),
-                "cpu_info": cpu_info,
-                "platform": plat,
-                "platform_release": plat_release,
+                "logged_in_username": winutils.get_logged_on_user()
             }
             
-            url = f"{astor.server}/api/v1/hello/"
-            headers = {
-                "content-type": "application/json",
-                "Authorization": f"Token {astor.token}",
-            }
-            requests.post(url, json.dumps(payload), headers=headers)
+            hello_url = f"{astor.server}/api/v1/hello/"
+            requests.patch(hello_url, json.dumps(payload), headers=headers)
         except Exception as e:
             pass
         finally:

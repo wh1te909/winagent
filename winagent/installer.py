@@ -355,6 +355,37 @@ def installagent():
             sg.Popup(e)
 
     
+
+    sleep(2)
+
+    with db:
+        astor = AgentStorage.select()[0]
+    
+    add_headers = {
+        "content-type": "application/json",
+        "Authorization": f"Token {astor.token}"
+    }
+
+    add_payload = {
+        "agentid": astor.agentid,
+        "hostname": agent_hostname,
+        "client": astor.client,
+        "site": astor.site,
+        "mesh_node_id": astor.mesh_node_id,
+        "description": astor.description,
+        "monitoring_type": astor.agent_type
+    }
+
+    add_url = f"{rmm_url}/api/v1/add/"
+    add_resp = requests.post(
+        add_url, json.dumps(add_payload), headers=add_headers
+    )
+
+    if add_resp.status_code != 200:
+        sg.Popup("Error during installation")
+        raise SystemExit()
+
+    
     subprocess.run(
         [
             "C:\\Program Files\\TacticalAgent\\salt-minion-setup.exe",
@@ -368,7 +399,7 @@ def installagent():
     )
     progress_bar_install.UpdateBar(30)
 
-    sleep(60)  # wait for salt to register on master
+    sleep(30)  # wait for salt to register on master
     window_install.FindElement("install_text").Update("Registering with the RMM...")
     progress_bar_install.UpdateBar(70)
 
@@ -377,7 +408,7 @@ def installagent():
         salt_accept_url, auth=(auth_username, auth_pw), headers=HEADERS
     )
 
-    sleep(25)  # wait for salt to start
+    sleep(15)  # wait for salt to start
 
     window_install.FindElement("install_text").Update(
         "Authenticating with the RMM..."
