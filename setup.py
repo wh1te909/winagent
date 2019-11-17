@@ -12,7 +12,7 @@ with open('requirements.txt') as f:
 
 setup(
     name='winagent',
-    version='0.1.0',
+    version='0.1.1',
     description='Tactical RMM Windows Agent',
     long_description=readme,
     author='wh1te909',

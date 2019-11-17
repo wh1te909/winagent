@@ -336,6 +336,10 @@ def installagent():
         new_mesh_agents = json.loads(mesh_resp.text)
         mesh_node_id = new_mesh_agents[agent_hostname]
 
+    version_file = os.path.join(os.getcwd(), "VERSION")
+
+    with open(version_file, "r") as vf:
+        version = vf.read()
 
     if not os.path.exists("C:\\Program Files\\TacticalAgent\\winagent\\agentdb.db"):
         try:
@@ -350,6 +354,7 @@ def installagent():
                     description=nssm_desc,
                     mesh_node_id=mesh_node_id,
                     token=token,
+                    version=version
                 ).save()
         except Exception as e:
             sg.Popup(e)

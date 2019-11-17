@@ -11,6 +11,7 @@ class AgentStorage(Model):
     description = CharField()
     mesh_node_id = CharField()
     token = CharField()
+    version = CharField()
 
     class Meta:
         database = db
