@@ -7,12 +7,15 @@ with open('README.md') as f:
 with open('LICENSE') as f:
     license = f.read()
 
+with open('VERSION') as f:
+    version = f.read()
+
 with open('requirements.txt') as f:
     requirements = f.read().splitlines()
 
 setup(
     name='winagent',
-    version='0.1.1',
+    version=version,
     description='Tactical RMM Windows Agent',
     long_description=readme,
     author='wh1te909',

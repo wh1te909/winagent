@@ -1,5 +1,5 @@
 #define MyAppName "Tactical RMM Agent"
-#define MyAppVersion "0.1.2"
+#define MyAppVersion "0.1.3"
 #define MyAppPublisher "wh1te909"
 #define MyAppURL "https://github.com/wh1te909"
 #define MyAppExeName "tacticalagent.exe"
@@ -55,13 +55,13 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent runascurrentuser
 
 [UninstallRun]
-Filename: "{app}\{#NSSM}"; Parameters: "stop tacticalagent";
-Filename: "{app}\{#NSSM}"; Parameters: "remove tacticalagent confirm";
-Filename: "{app}\{#NSSM}"; Parameters: "stop checkrunner";
-Filename: "{app}\{#NSSM}"; Parameters: "remove checkrunner confirm";
-Filename: "{#SALTUNINSTALL}"; Parameters: "/S";
-Filename: "{app}\{#MESHEXE}"; Parameters: "-fulluninstall";
-Filename: "{app}\{#CLEANUPAGENT}";
+Filename: "{app}\{#NSSM}"; Parameters: "stop tacticalagent"; RunOnceId: "stoptacagent";
+Filename: "{app}\{#NSSM}"; Parameters: "remove tacticalagent confirm"; RunOnceId: "removetacagent";
+Filename: "{app}\{#NSSM}"; Parameters: "stop checkrunner"; RunOnceId: "stopcheckrun";
+Filename: "{app}\{#NSSM}"; Parameters: "remove checkrunner confirm"; RunOnceId: "removecheckrun";
+Filename: "{#SALTUNINSTALL}"; Parameters: "/S"; RunOnceId: "saltrm";
+Filename: "{app}\{#MESHEXE}"; Parameters: "-fulluninstall"; RunOnceId: "meshrm";
+Filename: "{app}\{#CLEANUPAGENT}"; RunOnceId: "cleanuprm";
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}\winagent";

@@ -23,14 +23,10 @@ payload = {"agentid": agentid}
 headers = {"content-type": "application/json", "Authorization": f"Token {token}"}
 
 url = f"{server}/api/v1/deleteagent/"
-resp = requests.post(url, json.dumps(payload), headers=headers)
+requests.post(url, json.dumps(payload), headers=headers)
 
-if resp.status_code != 200:
-    print(resp.text)
-    input("Press Enter to continue...")
-else:
-    print("Removed agent from RMM")
 
+sleep(1)
 try:
     shutil.rmtree("C:\\salt")
 except Exception:
