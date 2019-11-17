@@ -33,7 +33,8 @@ def main():
         "total_ram": total_ram,
         "cpu_info": cpu_info,
         "platform": plat,
-        "platform_release": plat_release
+        "platform_release": plat_release,
+        "version": astor.version
     }
 
     try:
