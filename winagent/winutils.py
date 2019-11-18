@@ -85,18 +85,18 @@ def get_public_ip():
     return public_ip
 
 def get_cmd_output(cmd):
+
     try:
-        proc = subprocess.Popen(
-            cmd,
-            shell=True,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-        )
+        r = subprocess.run(cmd, capture_output=True)
     except Exception:
         return "error getting output"
+
+    if r.stdout:
+        return r.stdout.decode()
+    elif r.stderr:
+        return r.stderr.decode()
     else:
-        return proc.communicate()[0].decode("utf-8", errors="ignore")
+        return "error getting output"
 
 def get_os():
     try:

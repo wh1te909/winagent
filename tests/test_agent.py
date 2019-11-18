@@ -39,7 +39,7 @@ def test_os():
     assert "Microsoft Windows" in winutils.get_os()
 
 def test_cmd_output():
-    output = winutils.get_cmd_output("ping 8.8.8.8")
+    output = winutils.get_cmd_output(["ping", "8.8.8.8"])
     success = ["Reply", "bytes", "time", "TTL"]
     assert all(x in output for x in success)
 

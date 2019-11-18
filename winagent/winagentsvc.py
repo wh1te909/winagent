@@ -42,7 +42,7 @@ def main():
         try:
             payload = {
                 "agentid": astor.agentid,
-                "local_ip": winutils.get_cmd_output("ipconfig /all"),
+                "local_ip": winutils.get_cmd_output(["ipconfig", "/all"]),
                 "services": winutils.get_services(),
                 "public_ip": winutils.get_public_ip(),
                 "cpu_load": winutils.get_cpu_load(),
