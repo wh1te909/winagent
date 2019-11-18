@@ -12,8 +12,9 @@ def make_chunks(l, n):
 
 
 async def ping_check(cmd):
-    proc = await asyncio.create_subprocess_shell(
-        cmd['cmd'],
+
+    proc = await asyncio.create_subprocess_exec(
+        *cmd['cmd'],
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE
     )
@@ -104,7 +105,7 @@ def main():
                     for check in pingchecks:
                         pings.append(
                             {
-                                "cmd": f"ping {check['ip']}",
+                                "cmd": ["ping", f"{check['ip']}"],
                                 "id": check['id'],
                                 "token": astor.token,
                                 "server": astor.server
