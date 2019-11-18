@@ -19,6 +19,36 @@ except ImportError:
 
 kernel32 = ctypes.WinDLL(str("kernel32"), use_last_error=True)
 
+def get_av():
+    r = subprocess.run([
+        "wmic",
+        "/Namespace:\\\\root\SecurityCenter2",
+        "Path",
+        "AntiVirusProduct",
+        "get",
+        "displayName"
+        "/FORMAT:List"
+    ], capture_output=True)
+
+    if r.stdout:
+        out = r.stdout.decode().lower().replace(" ", "").splitlines()
+        out[:] = [i for i in out if i != ""] # remove empty list items
+
+        if len(out) == 1 and out[0] == 'displayname=windowsdefender':
+            return "windowsdefender"
+
+        elif len(out) == 2:
+            if "displayname=windowsdefender" in out:
+                out.remove("displayname=windowsdefender")
+                return out[0].split("displayname=", 1)[1]
+        
+        return "n/a"
+
+    elif r.stderr:
+        return "n/a"
+    else:
+        return "n/a"
+
 def get_boot_time():
     return psutil.boot_time()
 

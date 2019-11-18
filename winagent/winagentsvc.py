@@ -14,13 +14,6 @@ def main():
     with db:
         astor = AgentStorage.select()[0]
     
-    operating_system = winutils.get_os()
-    hostname = socket.gethostname()
-    total_ram = winutils.get_total_ram()
-    cpu_info = winutils.get_cpu_info()
-    plat = platform.system().lower()
-    plat_release = winutils.get_platform_release()
-
     headers = {
         "content-type": "application/json",
         "Authorization": f"Token {astor.token}"
@@ -28,13 +21,14 @@ def main():
 
     info = {
         "agentid": astor.agentid,
-        "hostname": hostname,
-        "operating_system": operating_system,
-        "total_ram": total_ram,
-        "cpu_info": cpu_info,
-        "platform": plat,
-        "platform_release": plat_release,
-        "version": astor.version
+        "hostname": socket.gethostname(),
+        "operating_system": winutils.get_os(),
+        "total_ram": winutils.get_total_ram(),
+        "cpu_info": winutils.get_cpu_info(),
+        "platform": platform.system().lower(),
+        "platform_release": winutils.get_platform_release(),
+        "version": astor.version,
+        "av": winutils.get_av()
     }
 
     try:
