@@ -139,28 +139,6 @@ def installagent():
         unique_id = f"{wmic_id}|{agent_hostname}"
 
 
-    mesh_api_url = f"{rmm_url}/api/v1/getmeshnodes/"
-    resp = requests.get(
-        mesh_api_url, auth=(auth_username, auth_pw), headers=HEADERS
-    )
-
-    if resp.status_code != 200:
-        sg.Popup("Bad mesh token...Exiting")
-        raise SystemExit()
-
-    try:
-        mesh_agents = json.loads(resp.text)
-    except Exception as e:
-        sg.Popup(e)
-        raise SystemExit()
-
-    try:
-        mesh_node_id = mesh_agents[agent_hostname]
-    except KeyError:
-        install_mesh = True
-    else:
-        install_mesh = False
-
     try:
         client_resp = requests.get(
             f"{rmm_url}/clients/installer/listclients/",
@@ -310,32 +288,33 @@ def installagent():
 
     progress_bar_install.UpdateBar(25)
 
-    if install_mesh:
 
-        get_mesh_exe = requests.post(
-            f"{rmm_url}/api/v1/getmeshexe/",
-            auth=(auth_username, auth_pw), 
-            headers=HEADERS, 
-            stream=True
-        )
+    # install mesh agent
+    get_mesh_exe = requests.post(
+        f"{rmm_url}/api/v1/getmeshexe/",
+        auth=(auth_username, auth_pw), 
+        headers=HEADERS, 
+        stream=True
+    )
 
-        mesh_file = "C:\\Program Files\\TacticalAgent\\meshagent.exe"
-        
-        with open(mesh_file, "wb") as out_file:
-            for chunk in get_mesh_exe.iter_content(chunk_size=1024):
-                if chunk: 
-                    out_file.write(chunk)
+    mesh_file = "C:\\Program Files\\TacticalAgent\\meshagent.exe"
+    
+    with open(mesh_file, "wb") as out_file:
+        for chunk in get_mesh_exe.iter_content(chunk_size=1024):
+            if chunk: 
+                out_file.write(chunk)
 
-        del get_mesh_exe
+    del get_mesh_exe
 
-        subprocess.run([mesh_file, "-fullinstall"])
-        sleep(10) # allow time for mesh agent to resgister with master
-        mesh_resp = requests.get(
-            mesh_api_url, auth=(auth_username, auth_pw), headers=HEADERS
-        )
-        new_mesh_agents = json.loads(mesh_resp.text)
-        mesh_node_id = new_mesh_agents[agent_hostname]
+    subprocess.run([mesh_file, "-fullinstall"])
+    sleep(5)
+    mesh_cmd = subprocess.run(["C:\\Program Files\\Mesh Agent\\MeshAgent.exe", "-nodeidhex"], capture_output=True)
+    try:
+        mesh_node_id = mesh_cmd.stdout.decode().strip()
+    except Exception:
+        mesh_node_id = "error installing meshagent"
 
+    
     version_file = os.path.join(os.getcwd(), "VERSION")
 
     with open(version_file, "r") as vf:
