@@ -9,6 +9,7 @@ import json
 import psutil
 import os
 import math
+import validators
 from collections import defaultdict
 from ctypes.wintypes import BYTE, WORD, DWORD, WCHAR
 
@@ -73,16 +74,22 @@ def get_logged_on_user():
     return user
 
 def get_public_ip():
-    public_ip = "unavailable"
+
     try:
-        public_ip = requests.get("https://ifconfig.co/ip", timeout=5).text.strip()
+        ifconfig = requests.get("https://ifconfig.co/ip", timeout=5).text.strip()
+
+        if not validators.ipv4(ifconfig) and not validators.ipv6(ifconfig):
+            icanhaz = requests.get("https://icanhazip.com", timeout=7).text.strip()
+
+            if not validators.ipv4(icanhaz) and not validators.ipv6(icanhaz):
+                return "error"
+            else:
+                return icanhaz
+        else:
+            return ifconfig
+
     except Exception:
-        try:
-            public_ip = requests.get("https://icanhazip.com", timeout=7).text.strip()
-        except Exception:
-            pass
-    
-    return public_ip
+        return "error"
 
 def get_cmd_output(cmd):
 
