@@ -4,12 +4,12 @@ chardet==3.0.4
 decorator==4.4.0
 future==0.18.0
 idna==2.8
-peewee==3.12.0
+peewee==3.13.1
 pefile==2019.4.18
 psutil==5.6.7
 PyInstaller==3.5
 PySide2==5.13.2
-PySimpleGUI==4.7.1
+PySimpleGUI==4.8.0
 PySimpleGUIQt==0.30.0
 pywin32==227
 pywin32-ctypes==0.2.0
@@ -17,5 +17,5 @@ requests==2.22.0
 shiboken2==5.13.2
 six==1.12.0
 urllib3==1.25.6
-validators==0.14.0
+validators==0.14.1
 WMI==1.4.9
