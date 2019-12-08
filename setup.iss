@@ -41,7 +41,7 @@ Source: "C:\Users\Public\Documents\tacticalagent\winagent\dist\tacticalagent\tac
 Source: "C:\Users\Public\Documents\tacticalagent\winagent\dist\tacticalagent\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs
 Source: "C:\Users\Public\Documents\tacticalagent\winagent\dist\winagentsvc\*"; DestDir: "{app}\winagent"; Flags: recursesubdirs createallsubdirs
 Source: "C:\Users\Public\Documents\tacticalagent\winagent\dist\checkrunner\*"; DestDir: "{app}\checkrunner"; Flags: recursesubdirs createallsubdirs
-Source: "C:\Users\Public\Documents\tacticalagent\winagent\dist\winupdater\*"; DestDir: "{app}\checkrunner"; Flags: recursesubdirs createallsubdirs
+Source: "C:\Users\Public\Documents\tacticalagent\winagent\dist\winupdater\*"; DestDir: "{app}\winupdater"; Flags: recursesubdirs createallsubdirs
 Source: "C:\Users\Public\Documents\tacticalagent\bin\nssm.exe"; DestDir: "{app}";
 Source: "C:\Users\Public\Documents\tacticalagent\winagent\saltcustom"; DestDir: "{app}";
 Source: "C:\Users\Public\Documents\tacticalagent\bin\salt-minion-setup.exe"; DestDir: "{app}";
