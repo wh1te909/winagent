@@ -261,3 +261,32 @@ def get_platform_release():
         plat_release = "unknown-release"
     
     return plat_release
+
+def get_needs_reboot():
+
+    if os.path.exists("c:\\salt\\salt-call.bat"):
+        r = subprocess.run([
+            "c:\\salt\\salt-call.bat", 
+            "win_wua.get_needs_reboot",
+            "--local", 
+            "--out=json"
+        ], capture_output=True)
+    else:
+        try:
+            r = subprocess.run([
+                "salt-call", 
+                "win_wua.get_needs_reboot",
+                "--local", 
+                "--out=json"
+            ], shell=True, capture_output=True)
+        except Exception:
+            return False
+    
+    if r.stderr:
+        return False
+    
+    ret = json.loads(r.stdout.decode("utf-8", errors="ignore"))
+    if ret["local"]:
+        return True
+        
+    return False

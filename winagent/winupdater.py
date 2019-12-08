@@ -6,6 +6,7 @@ import logging
 from time import sleep
 
 from models import AgentStorage, db
+from winutils import get_needs_reboot
 
 logging.basicConfig(
     filename="update.log",
@@ -91,10 +92,11 @@ if __name__ == "__main__":
                                 else:
                                     res_payload.update({"results": "failed"})
                         
-                        requests.patch(results_url, json.dumps(res_payload), headers=headers)
+                        requests.patch(results_url, json.dumps(res_payload), headers=headers, timeout=15)
 
-                    # trigger a patch scan once all updates finish installing   
-                    requests.get(scan_url, data=json.dumps(check_payload), headers=headers, timeout=15)
+                    # trigger a patch scan once all updates finish installing, and check if reboot needed 
+                    done_payload = { "agentid": astor.agentid, "reboot": get_needs_reboot() }  
+                    requests.patch(scan_url, data=json.dumps(done_payload), headers=headers, timeout=15)
                 except Exception as e:
                     logging.error(e)
         sleep(30)
