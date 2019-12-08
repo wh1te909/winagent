@@ -56,6 +56,7 @@ if __name__ == "__main__":
         
     updater_url = f"{astor.server}/winupdate/winupdater/"
     results_url = f"{astor.server}/winupdate/results/"
+    scan_url = f"{astor.server}/api/v1/triggerpatchscan/"
     headers = {
         "content-type": "application/json",
         "Authorization": f"Token {astor.token}"
@@ -91,6 +92,9 @@ if __name__ == "__main__":
                                     res_payload.update({"results": "failed"})
                         
                         requests.patch(results_url, json.dumps(res_payload), headers=headers)
+
+                    # trigger a patch scan once all updates finish installing   
+                    requests.get(scan_url, data=json.dumps(check_payload), headers=headers, timeout=15)
                 except Exception as e:
                     logging.error(e)
         sleep(30)
