@@ -16,6 +16,7 @@ cd winagent
 pyinstaller --clean --noconsole --icon=onit.ico .\tacticalagent.py
 pyinstaller --clean --noconsole --icon=onit.ico .\winagentsvc.py
 pyinstaller --clean --noconsole --icon=onit.ico .\checkrunner.py
+pyinstaller --clean --noconsole --icon=onit.ico .\winupdater.py
 pyinstaller --clean --noconsole --onefile --icon=onit.ico .\cleanup.py
 ```
 

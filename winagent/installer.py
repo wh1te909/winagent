@@ -475,5 +475,39 @@ def installagent():
     subprocess.run(
         ["C:\\Program Files\\TacticalAgent\\nssm.exe", "start", "checkrunner"]
     )
+
+    # winupdater
+    subprocess.run(
+        [
+            "C:\\Program Files\\TacticalAgent\\nssm.exe",
+            "install",
+            "winupdater",
+            "C:\\Program Files\\TacticalAgent\\winupdater\\winupdater.exe"
+        ]
+    )
+
+    subprocess.run(
+        [
+            "C:\\Program Files\\TacticalAgent\\nssm.exe",
+            "set",
+            "winupdater",
+            "DisplayName",
+            r"Tactical Agent Windows Update"
+        ]
+    )
+
+    subprocess.run(
+        [
+            "C:\\Program Files\\TacticalAgent\\nssm.exe",
+            "set",
+            "winupdater",
+            "Description",
+            r"Tactical RMM Agent Background Windows Update Service"
+        ]
+    )
+
+    subprocess.run(
+        ["C:\\Program Files\\TacticalAgent\\nssm.exe", "start", "winupdater"]
+    )
     window_install.Close()
     sg.Popup("Installation was successfull!")

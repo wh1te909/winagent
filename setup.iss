@@ -1,5 +1,5 @@
 #define MyAppName "Tactical RMM Agent"
-#define MyAppVersion "0.1.8"
+#define MyAppVersion "0.1.9"
 #define MyAppPublisher "wh1te909"
 #define MyAppURL "https://github.com/wh1te909"
 #define MyAppExeName "tacticalagent.exe"
@@ -41,6 +41,7 @@ Source: "C:\Users\Public\Documents\tacticalagent\winagent\dist\tacticalagent\tac
 Source: "C:\Users\Public\Documents\tacticalagent\winagent\dist\tacticalagent\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs
 Source: "C:\Users\Public\Documents\tacticalagent\winagent\dist\winagentsvc\*"; DestDir: "{app}\winagent"; Flags: recursesubdirs createallsubdirs
 Source: "C:\Users\Public\Documents\tacticalagent\winagent\dist\checkrunner\*"; DestDir: "{app}\checkrunner"; Flags: recursesubdirs createallsubdirs
+Source: "C:\Users\Public\Documents\tacticalagent\winagent\dist\winupdater\*"; DestDir: "{app}\checkrunner"; Flags: recursesubdirs createallsubdirs
 Source: "C:\Users\Public\Documents\tacticalagent\bin\nssm.exe"; DestDir: "{app}";
 Source: "C:\Users\Public\Documents\tacticalagent\winagent\saltcustom"; DestDir: "{app}";
 Source: "C:\Users\Public\Documents\tacticalagent\bin\salt-minion-setup.exe"; DestDir: "{app}";
@@ -59,6 +60,8 @@ Filename: "{app}\{#NSSM}"; Parameters: "stop tacticalagent"; RunOnceId: "stoptac
 Filename: "{app}\{#NSSM}"; Parameters: "remove tacticalagent confirm"; RunOnceId: "removetacagent";
 Filename: "{app}\{#NSSM}"; Parameters: "stop checkrunner"; RunOnceId: "stopcheckrun";
 Filename: "{app}\{#NSSM}"; Parameters: "remove checkrunner confirm"; RunOnceId: "removecheckrun";
+Filename: "{app}\{#NSSM}"; Parameters: "stop winupdater"; RunOnceId: "stopwinupdate";
+Filename: "{app}\{#NSSM}"; Parameters: "remove winupdater confirm"; RunOnceId: "removewinupdate";
 Filename: "{#SALTUNINSTALL}"; Parameters: "/S"; RunOnceId: "saltrm";
 Filename: "{app}\{#MESHEXE}"; Parameters: "-fulluninstall"; RunOnceId: "meshrm";
 Filename: "{app}\{#CLEANUPAGENT}"; RunOnceId: "cleanuprm";
@@ -66,6 +69,7 @@ Filename: "{app}\{#CLEANUPAGENT}"; RunOnceId: "cleanuprm";
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}\winagent";
 Type: filesandordirs; Name: "{app}\checkrunner";
+Type: filesandordirs; Name: "{app}\winupdater";
 Type: filesandordirs; Name: "{app}";
 Type: filesandordirs; Name: "{#SALTDIR}";
 
