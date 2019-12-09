@@ -4,6 +4,7 @@ import requests
 import os
 import logging
 from time import sleep
+import datetime as dt
 
 from models import AgentStorage, db
 from winutils import get_needs_reboot
@@ -74,29 +75,36 @@ if __name__ == "__main__":
                 pass
             else:
                 try:
-                    for patch in resp.json():
-                        kb = patch["kb"]
-                        install = install_update(kb)
-                        logging.info(install)
-                        res_payload = {"agentid": astor.agentid, "kb": kb}
+                    policy = resp.json()[0]["patch_policy"]
+                    weekday = dt.datetime.today().weekday() # Monday 0, Sunday 6
+                    hour = dt.datetime.now().hour
 
-                        if install == "error":
-                            res_payload.update({"results": "error"})
-                        else:
-                            status = json.loads(install)
-                            if status["local"]["Install"]["Updates"] == "Nothing to install":
-                                res_payload.update({"results": "alreadyinstalled"})
+                    if weekday in policy["run_time_days"] and hour == policy["run_time_hour"]:
+
+                        for patch in resp.json():
+                            kb = patch["kb"]
+                            install = install_update(kb)
+                            logging.info(install)
+                            res_payload = {"agentid": astor.agentid, "kb": kb}
+
+                            if install == "error":
+                                res_payload.update({"results": "error"})
                             else:
-                                if status["local"]["Install"]["Success"]:
-                                    res_payload.update({"results": "success"})
+                                status = json.loads(install)
+                                if status["local"]["Install"]["Updates"] == "Nothing to install":
+                                    res_payload.update({"results": "alreadyinstalled"})
                                 else:
-                                    res_payload.update({"results": "failed"})
-                        
-                        requests.patch(results_url, json.dumps(res_payload), headers=headers, timeout=15)
+                                    if status["local"]["Install"]["Success"]:
+                                        res_payload.update({"results": "success"})
+                                    else:
+                                        res_payload.update({"results": "failed"})
+                            
+                            requests.patch(results_url, json.dumps(res_payload), headers=headers, timeout=15)
 
-                    # trigger a patch scan once all updates finish installing, and check if reboot needed 
-                    done_payload = { "agentid": astor.agentid, "reboot": get_needs_reboot() }  
-                    requests.patch(scan_url, data=json.dumps(done_payload), headers=headers, timeout=15)
+                        # trigger a patch scan once all updates finish installing, and check if reboot needed 
+                        done_payload = { "agentid": astor.agentid, "reboot": get_needs_reboot() }  
+                        requests.patch(scan_url, data=json.dumps(done_payload), headers=headers, timeout=15)
+
                 except Exception as e:
                     logging.error(e)
-        sleep(30)
+        sleep(180)
