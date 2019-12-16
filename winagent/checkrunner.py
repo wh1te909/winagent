@@ -2,6 +2,7 @@ import json
 import requests
 import asyncio
 from time import sleep
+from random import randrange
 
 from models import AgentStorage, db
 
@@ -92,7 +93,7 @@ def main():
         try:
             resp = requests.get(url, data=json.dumps(payload), headers=headers, timeout=15)
         except Exception:
-            sleep(60)
+            sleep(90)
         else:
             try:
                 data = resp.json()
@@ -120,7 +121,7 @@ def main():
                         tasks, max_concurrent_tasks=20
                     )
                 else:
-                    interval = 10
+                    interval = randrange(start=45, stop=90)
 
             except Exception:
                 pass
@@ -128,7 +129,7 @@ def main():
                 try:
                     sleep(interval)
                 except Exception:
-                    sleep(30)
+                    sleep(randrange(start=60, stop=120))
 
 
 if __name__ == "__main__":
