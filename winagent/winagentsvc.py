@@ -57,7 +57,7 @@ def main():
         except Exception as e:
             pass
         finally:
-            sleep(randrange(start=0, stop=5))
+            sleep(randrange(start=15, stop=30))
 
 
 if __name__ == "__main__":

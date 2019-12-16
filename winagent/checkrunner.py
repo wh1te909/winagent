@@ -92,7 +92,7 @@ def main():
         try:
             resp = requests.get(url, data=json.dumps(payload), headers=headers, timeout=15)
         except Exception:
-            sleep(15)
+            sleep(60)
         else:
             try:
                 data = resp.json()
