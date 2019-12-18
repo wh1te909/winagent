@@ -6,6 +6,21 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname( __file__ ), '..'))
 
 from winagent import winutils
 
+def test_checkrunner():
+    pings = []
+    tasks = []
+    ips = ['8.8.8.8', 'google.com', '1.1.1.1', 'ak4j287asdjashdk45345kjad', 'facebook.com', '0.0.0.0']
+
+    for ip in ips:
+        pings.append({"cmd": ["ping", ip], "id": 3, "token": "abc", "server": "https://google.com"})
+
+    for ping in pings:
+        tasks.append(winutils.ping_check(ping))
+
+    results = winutils.run_asyncio_commands(tasks, max_concurrent_tasks=20)
+    
+    assert results == ['passing', 'passing', 'passing', 'failing', 'passing', 'failing']
+
 def test_boot_time():
     assert type(winutils.get_boot_time()) is float
 
