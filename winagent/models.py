@@ -2,6 +2,7 @@ from peewee import *
 
 db = SqliteDatabase("C:\\Program Files\\TacticalAgent\\winagent\\agentdb.db")
 
+
 class AgentStorage(Model):
     server = CharField()
     agentid = CharField()

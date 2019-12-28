@@ -21,6 +21,7 @@ except ImportError:
 
 kernel32 = ctypes.WinDLL(str("kernel32"), use_last_error=True)
 
+
 def make_chunks(l, n):
     for i in range(0, len(l), n):
         yield l[i : i + n]
@@ -29,9 +30,7 @@ def make_chunks(l, n):
 async def ping_check(cmd):
 
     proc = await asyncio.create_subprocess_exec(
-        *cmd['cmd'],
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE
+        *cmd["cmd"], stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
     )
     stdout, stderr = await proc.communicate()
 
@@ -44,21 +43,17 @@ async def ping_check(cmd):
             status = "passing"
         else:
             status = "failing"
-    
+
     if stderr:
         status = "failing"
         output = "error running ping check"
-    
+
     url = f"{cmd['server']}/checks/updatepingcheck/"
     headers = {
         "content-type": "application/json",
         "Authorization": f"Token {cmd['token']}",
     }
-    payload = {
-        "output": output,
-        "id": cmd['id'],
-        "status": status
-    }
+    payload = {"output": output, "id": cmd["id"], "status": status}
     resp = requests.patch(url, json.dumps(payload), headers=headers)
     return status
 
@@ -93,28 +88,30 @@ def run_asyncio_commands(tasks, max_concurrent_tasks=0):
 
 
 def get_av():
-    r = subprocess.run([
-        "wmic",
-        "/Namespace:\\\\root\SecurityCenter2",
-        "Path",
-        "AntiVirusProduct",
-        "get",
-        "displayName"
-        "/FORMAT:List"
-    ], capture_output=True)
+    r = subprocess.run(
+        [
+            "wmic",
+            "/Namespace:\\\\root\SecurityCenter2",
+            "Path",
+            "AntiVirusProduct",
+            "get",
+            "displayName" "/FORMAT:List",
+        ],
+        capture_output=True,
+    )
 
     if r.stdout:
         out = r.stdout.decode().lower().replace(" ", "").splitlines()
-        out[:] = [i for i in out if i != ""] # remove empty list items
+        out[:] = [i for i in out if i != ""]  # remove empty list items
 
-        if len(out) == 1 and out[0] == 'displayname=windowsdefender':
+        if len(out) == 1 and out[0] == "displayname=windowsdefender":
             return "windowsdefender"
 
         elif len(out) == 2:
             if "displayname=windowsdefender" in out:
                 out.remove("displayname=windowsdefender")
                 return out[0].split("displayname=", 1)[1]
-        
+
         return "n/a"
 
     elif r.stderr:
@@ -122,28 +119,35 @@ def get_av():
     else:
         return "n/a"
 
+
 def get_boot_time():
     return psutil.boot_time()
+
 
 def get_cpu_load():
     return psutil.cpu_percent(interval=5)
 
+
 def get_used_ram():
     return round(psutil.virtual_memory().percent)
+
 
 def get_services():
     return [svc.as_dict() for svc in psutil.win_service_iter()]
 
+
 def get_total_ram():
     return math.ceil((psutil.virtual_memory().total / 1_073_741_824))
+
 
 def get_logged_on_user():
     try:
         user = psutil.users()[0].name
     except Exception:
         user = "None"
-    
+
     return user
+
 
 def get_public_ip():
 
@@ -163,6 +167,7 @@ def get_public_ip():
     except Exception:
         return "error"
 
+
 def get_cmd_output(cmd):
 
     try:
@@ -177,11 +182,14 @@ def get_cmd_output(cmd):
     else:
         return "error getting output"
 
+
 def get_os():
     try:
         c = wmi.WMI()
         for os in c.Win32_OperatingSystem():
-            op_sys = f"{os.Caption}, {platform.architecture()[0]} (build {os.BuildNumber})"
+            op_sys = (
+                f"{os.Caption}, {platform.architecture()[0]} (build {os.BuildNumber})"
+            )
     except Exception:
         op_sys = "unknown-os"
 
@@ -198,13 +206,14 @@ def get_cpu_info():
                 {
                     "name": cpus[i].Name,
                     "physical_cores": cpus[i].NumberOfCores,
-                    "logical_cores": cpus[i].NumberOfLogicalProcessors
+                    "logical_cores": cpus[i].NumberOfLogicalProcessors,
                 }
             )
     except Exception:
         cpu_info = [{"error": "error getting cpu info"}]
 
     return cpu_info
+
 
 def bytes2human(n):
     # http://code.activestate.com/recipes/578019
@@ -217,6 +226,7 @@ def bytes2human(n):
             value = float(n) / prefix[s]
             return "%.1f%s" % (value, s)
     return "%sB" % n
+
 
 def get_disks():
     disks = defaultdict(dict)
@@ -235,7 +245,7 @@ def get_disks():
             disks[device]["fstype"] = part.fstype
     except Exception:
         disks = {"error": "error getting disk info"}
-    
+
     return disks
 
 
@@ -267,6 +277,7 @@ def os_version_info_ex():
 
     return OSVersionInfoEx()
 
+
 def get_os_version_info():
     info = os_version_info_ex()
     c = wmi.WMI()
@@ -286,6 +297,7 @@ def get_os_version_info():
         "Version": c_info.Version,
     }
     return ret
+
 
 # source: https://github.com/saltstack/salt/blob/master/salt/grains/core.py
 def get_windows_os_release_grain(caption, product_type):
@@ -323,6 +335,7 @@ def get_windows_os_release_grain(caption, product_type):
 
     return os_release
 
+
 def get_platform_release():
     try:
         os = get_os_version_info()
@@ -331,34 +344,37 @@ def get_platform_release():
         plat_release = f"{plat}-{grains}"
     except Exception:
         plat_release = "unknown-release"
-    
+
     return plat_release
+
 
 def get_needs_reboot():
 
     if os.path.exists("c:\\salt\\salt-call.bat"):
-        r = subprocess.run([
-            "c:\\salt\\salt-call.bat", 
-            "win_wua.get_needs_reboot",
-            "--local", 
-            "--out=json"
-        ], capture_output=True)
+        r = subprocess.run(
+            [
+                "c:\\salt\\salt-call.bat",
+                "win_wua.get_needs_reboot",
+                "--local",
+                "--out=json",
+            ],
+            capture_output=True,
+        )
     else:
         try:
-            r = subprocess.run([
-                "salt-call", 
-                "win_wua.get_needs_reboot",
-                "--local", 
-                "--out=json"
-            ], shell=True, capture_output=True)
+            r = subprocess.run(
+                ["salt-call", "win_wua.get_needs_reboot", "--local", "--out=json"],
+                shell=True,
+                capture_output=True,
+            )
         except Exception:
             return False
-    
+
     if r.stderr:
         return False
-    
+
     ret = json.loads(r.stdout.decode("utf-8", errors="ignore"))
     if ret["local"]:
         return True
-        
+
     return False

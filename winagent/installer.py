@@ -17,6 +17,7 @@ from models import db, AgentStorage
 
 HEADERS = {"content-type": "application/json"}
 
+
 def rand_string(length):
     chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890"
     string = ""
@@ -24,6 +25,7 @@ def rand_string(length):
         string += random.choice(chars)
         if len(string) == length:
             return string
+
 
 def installagent():
     sg.SetOptions(font=("Helvetica", 12), icon=os.path.join(os.getcwd(), "onit.ico"))
@@ -111,7 +113,7 @@ def installagent():
                 two_factor_url,
                 json.dumps(twofactor_payload),
                 auth=(auth_username, auth_pw),
-                headers=HEADERS
+                headers=HEADERS,
             )
             if twofactor_resp.status_code != 200:
                 sg.Popup(json.loads(twofactor_resp.text))
@@ -119,7 +121,6 @@ def installagent():
             break
 
     window_auth.Close()
-
 
     # generate agent id
     agent_hostname = socket.gethostname()
@@ -138,12 +139,11 @@ def installagent():
     else:
         unique_id = f"{wmic_id}|{agent_hostname}"
 
-
     try:
         client_resp = requests.get(
             f"{rmm_url}/clients/installer/listclients/",
             auth=(auth_username, auth_pw),
-            headers=HEADERS
+            headers=HEADERS,
         )
     except Exception:
         sg.Popup("Unable to contact the RMM. Please check your internet connection")
@@ -152,12 +152,11 @@ def installagent():
         clients_data = json.loads(client_resp.text)
         clients = [client["client"] for client in clients_data]
 
-
     def get_sites(client):
         sites_resp = requests.get(
             f"{rmm_url}/clients/installer/{client}/sites/",
             auth=(auth_username, auth_pw),
-            headers=HEADERS
+            headers=HEADERS,
         )
         sites_data = json.loads(sites_resp.text)
         sites = [site["site"] for site in sites_data]
@@ -215,9 +214,9 @@ def installagent():
     ]
 
     window = sg.Window(
-        "Tactical Agent Installation", 
-        size=(600, 400), 
-        icon=os.path.join(os.getcwd(), "onit.ico")
+        "Tactical Agent Installation",
+        size=(600, 400),
+        icon=os.path.join(os.getcwd(), "onit.ico"),
     ).Layout(layout)
 
     while True:
@@ -239,7 +238,6 @@ def installagent():
 
         window.FindElement("site").Update(values=get_sites(selected_client))
 
-
     if values["server"]:
         nssm_type = "server"
     else:
@@ -253,7 +251,7 @@ def installagent():
         token_url,
         json.dumps(token_payload),
         auth=(auth_username, auth_pw),
-        headers=HEADERS
+        headers=HEADERS,
     )
 
     if token_resp.status_code != 200:
@@ -263,24 +261,15 @@ def installagent():
     else:
         token = json.loads(token_resp.text)["token"]
 
-
     layout_install = [
-        [
-            sg.Text(
-                "Installing agent...this will take a while...", key="install_text"
-            )
-        ],
-        [
-            sg.ProgressBar(
-                100, orientation="h", size=(20, 20), key="progressinstall"
-            )
-        ],
+        [sg.Text("Installing agent...this will take a while...", key="install_text")],
+        [sg.ProgressBar(100, orientation="h", size=(20, 20), key="progressinstall")],
     ]
 
     window_install = sg.Window(
-        "Tactical Agent Installer", 
+        "Tactical Agent Installer",
         size=(400, 60),
-        icon=os.path.join(os.getcwd(), "onit.ico")
+        icon=os.path.join(os.getcwd(), "onit.ico"),
     ).Layout(layout_install)
     event, values = window_install.Read(timeout=300)
 
@@ -288,33 +277,34 @@ def installagent():
 
     progress_bar_install.UpdateBar(25)
 
-
     # install mesh agent
     get_mesh_exe = requests.post(
         f"{rmm_url}/api/v1/getmeshexe/",
-        auth=(auth_username, auth_pw), 
-        headers=HEADERS, 
-        stream=True
+        auth=(auth_username, auth_pw),
+        headers=HEADERS,
+        stream=True,
     )
 
     mesh_file = "C:\\Program Files\\TacticalAgent\\meshagent.exe"
-    
+
     with open(mesh_file, "wb") as out_file:
         for chunk in get_mesh_exe.iter_content(chunk_size=1024):
-            if chunk: 
+            if chunk:
                 out_file.write(chunk)
 
     del get_mesh_exe
 
     subprocess.run([mesh_file, "-fullinstall"])
     sleep(5)
-    mesh_cmd = subprocess.run(["C:\\Program Files\\Mesh Agent\\MeshAgent.exe", "-nodeidhex"], capture_output=True)
+    mesh_cmd = subprocess.run(
+        ["C:\\Program Files\\Mesh Agent\\MeshAgent.exe", "-nodeidhex"],
+        capture_output=True,
+    )
     try:
         mesh_node_id = mesh_cmd.stdout.decode().strip()
     except Exception:
         mesh_node_id = "error installing meshagent"
 
-    
     version_file = os.path.join(os.getcwd(), "VERSION")
 
     with open(version_file, "r") as vf:
@@ -333,21 +323,19 @@ def installagent():
                     description=nssm_desc,
                     mesh_node_id=mesh_node_id,
                     token=token,
-                    version=version
+                    version=version,
                 ).save()
         except Exception as e:
             sg.Popup(e)
-
-    
 
     sleep(2)
 
     with db:
         astor = AgentStorage.select()[0]
-    
+
     add_headers = {
         "content-type": "application/json",
-        "Authorization": f"Token {astor.token}"
+        "Authorization": f"Token {astor.token}",
     }
 
     add_payload = {
@@ -357,19 +345,16 @@ def installagent():
         "site": astor.site,
         "mesh_node_id": astor.mesh_node_id,
         "description": astor.description,
-        "monitoring_type": astor.agent_type
+        "monitoring_type": astor.agent_type,
     }
 
     add_url = f"{rmm_url}/api/v1/add/"
-    add_resp = requests.post(
-        add_url, json.dumps(add_payload), headers=add_headers
-    )
+    add_resp = requests.post(add_url, json.dumps(add_payload), headers=add_headers)
 
     if add_resp.status_code != 200:
         sg.Popup("Error during installation")
         raise SystemExit()
 
-    
     subprocess.run(
         [
             "C:\\Program Files\\TacticalAgent\\salt-minion-setup.exe",
@@ -379,7 +364,7 @@ def installagent():
             f"/minion-name={agent_hostname}",
             "/start-minion=1",
         ],
-        shell=True
+        shell=True,
     )
     progress_bar_install.UpdateBar(30)
 
@@ -394,25 +379,19 @@ def installagent():
 
     sleep(15)  # wait for salt to start
 
-    window_install.FindElement("install_text").Update(
-        "Authenticating with the RMM..."
-    )
+    window_install.FindElement("install_text").Update("Authenticating with the RMM...")
     progress_bar_install.UpdateBar(75)
-    window_install.FindElement("install_text").Update(
-        "Registering agent service..."
-    )
+    window_install.FindElement("install_text").Update("Registering agent service...")
     # install service
     subprocess.run(
         [
             "C:\\Program Files\\TacticalAgent\\nssm.exe",
             "install",
             "tacticalagent",
-            "C:\\Program Files\\TacticalAgent\\winagent\\winagentsvc.exe"
+            "C:\\Program Files\\TacticalAgent\\winagent\\winagentsvc.exe",
         ]
     )
-    window_install.FindElement("install_text").Update(
-        "Settings service description..."
-    )
+    window_install.FindElement("install_text").Update("Settings service description...")
     progress_bar_install.UpdateBar(80)
     # set display name
     subprocess.run(
@@ -421,7 +400,7 @@ def installagent():
             "set",
             "tacticalagent",
             "DisplayName",
-            r"Tactical RMM Agent"
+            r"Tactical RMM Agent",
         ]
     )
     window_install.FindElement("install_text").Update("Starting service...")
@@ -433,7 +412,7 @@ def installagent():
             "set",
             "tacticalagent",
             "Description",
-            r"Tactical RMM Monitoring Agent"
+            r"Tactical RMM Monitoring Agent",
         ]
     )
     progress_bar_install.UpdateBar(95)
@@ -448,7 +427,7 @@ def installagent():
             "C:\\Program Files\\TacticalAgent\\nssm.exe",
             "install",
             "checkrunner",
-            "C:\\Program Files\\TacticalAgent\\checkrunner\\checkrunner.exe"
+            "C:\\Program Files\\TacticalAgent\\checkrunner\\checkrunner.exe",
         ]
     )
 
@@ -458,7 +437,7 @@ def installagent():
             "set",
             "checkrunner",
             "DisplayName",
-            r"Tactical Agent Check Runner"
+            r"Tactical Agent Check Runner",
         ]
     )
 
@@ -468,7 +447,7 @@ def installagent():
             "set",
             "checkrunner",
             "Description",
-            r"Tactical RMM Agent Background Check Runner"
+            r"Tactical RMM Agent Background Check Runner",
         ]
     )
 
@@ -482,7 +461,7 @@ def installagent():
             "C:\\Program Files\\TacticalAgent\\nssm.exe",
             "install",
             "winupdater",
-            "C:\\Program Files\\TacticalAgent\\winupdater\\winupdater.exe"
+            "C:\\Program Files\\TacticalAgent\\winupdater\\winupdater.exe",
         ]
     )
 
@@ -492,7 +471,7 @@ def installagent():
             "set",
             "winupdater",
             "DisplayName",
-            r"Tactical Agent Windows Update"
+            r"Tactical Agent Windows Update",
         ]
     )
 
@@ -502,7 +481,7 @@ def installagent():
             "set",
             "winupdater",
             "Description",
-            r"Tactical RMM Agent Background Windows Update Service"
+            r"Tactical RMM Agent Background Windows Update Service",
         ]
     )
 

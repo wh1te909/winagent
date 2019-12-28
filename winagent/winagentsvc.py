@@ -13,10 +13,10 @@ def main():
 
     with db:
         astor = AgentStorage.select()[0]
-    
+
     headers = {
         "content-type": "application/json",
-        "Authorization": f"Token {astor.token}"
+        "Authorization": f"Token {astor.token}",
     }
 
     info = {
@@ -28,7 +28,7 @@ def main():
         "platform": platform.system().lower(),
         "platform_release": winutils.get_platform_release(),
         "version": astor.version,
-        "av": winutils.get_av()
+        "av": winutils.get_av(),
     }
 
     try:
@@ -36,7 +36,6 @@ def main():
         requests.patch(update_url, json.dumps(info), headers=headers)
     except Exception:
         pass
-
 
     while 1:
         try:
@@ -49,9 +48,9 @@ def main():
                 "used_ram": winutils.get_used_ram(),
                 "disks": winutils.get_disks(),
                 "boot_time": winutils.get_boot_time(),
-                "logged_in_username": winutils.get_logged_on_user()
+                "logged_in_username": winutils.get_logged_on_user(),
             }
-            
+
             hello_url = f"{astor.server}/api/v1/hello/"
             requests.patch(hello_url, json.dumps(payload), headers=headers)
         except Exception as e:
@@ -62,5 +61,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-

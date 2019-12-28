@@ -7,6 +7,7 @@ from time import sleep
 
 AGENT_DB = "C:\\Program Files\\TacticalAgent\\winagent\\agentdb.db"
 
+
 def db_connect(db_path=AGENT_DB):
     con = sqlite3.connect(db_path)
     return con

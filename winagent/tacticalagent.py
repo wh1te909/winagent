@@ -10,10 +10,11 @@ from models import AgentStorage, db
 
 HEADERS = {"content-type": "application/json"}
 
+
 def create_auth_window():
     with db:
         server = AgentStorage.select()[0].server
-    
+
     sg.SetOptions(font=("Helvetica", 12), icon=os.path.join(os.getcwd(), "onit.ico"))
     sg.ChangeLookAndFeel("Reddit")
     auth_layout = [
@@ -67,7 +68,7 @@ def create_auth_window():
                 two_factor_url,
                 json.dumps(twofactor_payload),
                 auth=(auth_username, auth_pw),
-                headers=HEADERS
+                headers=HEADERS,
             )
             if twofactor_resp.status_code != 200:
                 sg.Popup(json.loads(twofactor_resp.text))
@@ -75,6 +76,7 @@ def create_auth_window():
             break
 
     window_auth.Close()
+
 
 def create_status_window():
     sg.SetOptions(font=("Helvetica", 12), icon=os.path.join(os.getcwd(), "onit.ico"))
@@ -85,7 +87,7 @@ def create_status_window():
 
     status_layout = [
         [sg.Text("Agent status: "), sg.Text(agent_status, key="agentstatus"),],
-        [sg.Text("Salt minion status: "), sg.Text(salt_status, key="saltstatus"),]
+        [sg.Text("Salt minion status: "), sg.Text(salt_status, key="saltstatus"),],
     ]
 
     window_status = sg.Window(
@@ -102,13 +104,12 @@ def create_status_window():
             window_status.Close()
             raise SystemExit()
 
-        
 
 if __name__ == "__main__":
     if not ctypes.windll.shell32.IsUserAnAdmin():
         sg.Popup("Please re-run this script as admin. Exiting...")
         raise SystemExit()
-    
+
     try:
         service = psutil.win_service_get("tacticalagent")
     except psutil.NoSuchProcess:
@@ -116,4 +117,3 @@ if __name__ == "__main__":
     else:
         create_auth_window()
         create_status_window()
-    
