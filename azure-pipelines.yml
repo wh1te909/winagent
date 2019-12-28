@@ -1,5 +1,5 @@
 trigger:
-- master
+- azure-test
 
 strategy:
   matrix:
