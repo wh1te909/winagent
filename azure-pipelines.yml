@@ -1,22 +1,33 @@
 trigger:
 - master
 
-pool: windows-vms
+jobs:
+- job: setup_env
+  displayName: 'Setup Environment'
+  strategy:
+    matrix:
+      Server2019:
+        AGENT_NAME: 'AZ-SERVER2019'
+      Server2016:
+        AGENT_NAME: 'AZ-SERVER2016'
+  
+  pool:
+    name: windows-vms
+  
+  steps:
 
-steps:
+  - powershell: |
+      Set-MpPreference -DisableArchiveScanning $true
+      Set-MpPreference -DisableRealtimeMonitoring $true
+      Set-MpPreference -DisableBehaviorMonitoring $true
+      choco install python -y --version 3.7.5
+      SET PATH=/c/Python37:/c/Python37/Scripts:$PATH
+      refreshenv
+      python -m pip install --upgrade pip
+      pip install -r requirements-test.txt
+    displayName: 'Install dependencies'
 
-- powershell: |
-    Set-MpPreference -DisableArchiveScanning $true
-    Set-MpPreference -DisableRealtimeMonitoring $true
-    Set-MpPreference -DisableBehaviorMonitoring $true
-    choco install python -y --version 3.7.5
-    SET PATH=/c/Python37:/c/Python37/Scripts:$PATH
-    refreshenv
-    python -m pip install --upgrade pip
-    pip install -r requirements-test.txt
-  displayName: 'Install dependencies'
-
-- powershell: |
-    pip install -U pytest pytest-azurepipelines
-    pytest -v
-  displayName: 'Run Tests'
+  - powershell: |
+      pip install -U pytest pytest-azurepipelines
+      pytest -v
+    displayName: 'Run Tests'
