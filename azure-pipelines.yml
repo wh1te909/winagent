@@ -6,6 +6,9 @@ pool: windows-vms
 steps:
 
 - powershell: |
+    Set-MpPreference -DisableArchiveScanning $true
+    Set-MpPreference -DisableRealtimeMonitoring $true
+    Set-MpPreference -DisableBehaviorMonitoring $true
     choco install python -y --version 3.7.5
     SET PATH=/c/Python37:/c/Python37/Scripts:$PATH
     refreshenv
