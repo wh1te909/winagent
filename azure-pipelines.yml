@@ -1,30 +1,17 @@
 trigger:
-- azure-test
+- master
 
-strategy:
-  matrix:
-    win2019:
-      imageName: 'windows-2019'
-    win2016:
-      imageName: 'vs2017-win2016'
-    win2012R2:
-      imageName: 'vs2015-win2012r2'
-
-pool:
-  vmImage: $(imageName)
+pool: windows-vms
 
 steps:
-- task: UsePythonVersion@0
-  inputs:
-    versionSpec: '3.7'
-  displayName: 'Use Python 3.7'
 
-- script: |
+- powershell: |
+    choco install python --version 3.7.5
     python -m pip install --upgrade pip
-    pip install -r requirements-test.txt
+    pip install -r requirements.txt
   displayName: 'Install dependencies'
 
-- script: |
+- powershell: |
     pip install -U pytest pytest-azurepipelines
-    pytest
-  displayName: 'pytest'
+    pytest -v
+  displayName: 'Run Tests'
