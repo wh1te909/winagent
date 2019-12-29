@@ -20,6 +20,8 @@ jobs:
   
   pool:
     name: windows-vms
+    demands:
+      - agent.name -equals $(AGENT_NAME)
   
   steps:
   - script: |
