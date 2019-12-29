@@ -6,9 +6,6 @@ pool: windows-vms
 steps:
 
 - powershell: |
-    Set-MpPreference -DisableArchiveScanning $true
-    Set-MpPreference -DisableRealtimeMonitoring $true
-    Set-MpPreference -DisableBehaviorMonitoring $true
     choco install python --version 3.7.5
     PATH=/c/Python37:/c/Python37/Scripts:$PATH
     python -m pip install --upgrade pip
