@@ -17,6 +17,10 @@ jobs:
         AGENT_NAME: 'AZ-WIN2012R2'
       Windows81:
         AGENT_NAME: 'AZ-WIN81'
+      Windows2008R2:
+        AGENT_NAME: 'AZ-WIN2008R2'
+      Windows7SP1:
+        AGENT_NAME: 'AZ-WIN7'
   
   pool:
     name: windows-vms
