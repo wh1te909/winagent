@@ -94,9 +94,14 @@ def installagent():
 
             # rmm basic auth
             auth_url = f"{rmm_url}/api/v1/agentauth/"
-            auth_resp = requests.post(
-                auth_url, auth=(auth_username, auth_pw), headers=HEADERS
-            )
+            try:
+
+                auth_resp = requests.post(
+                    auth_url, auth=(auth_username, auth_pw), headers=HEADERS
+                )
+            except Exception:
+                sg.Popup("Unable to contact the RMM.")
+                continue
             if auth_resp.status_code != 200:
                 sg.Popup("Bad username or password")
                 continue
@@ -310,23 +315,22 @@ def installagent():
     with open(version_file, "r") as vf:
         version = vf.read()
 
-    if not os.path.exists("C:\\Program Files\\TacticalAgent\\winagent\\agentdb.db"):
-        try:
-            with db:
-                db.create_tables([AgentStorage])
-                AgentStorage(
-                    server=rmm_url,
-                    agentid=unique_id,
-                    client=nssm_client,
-                    site=nssm_site,
-                    agent_type=nssm_type,
-                    description=nssm_desc,
-                    mesh_node_id=mesh_node_id,
-                    token=token,
-                    version=version,
-                ).save()
-        except Exception as e:
-            sg.Popup(e)
+    try:
+        with db:
+            db.create_tables([AgentStorage])
+            AgentStorage(
+                server=rmm_url,
+                agentid=unique_id,
+                client=nssm_client,
+                site=nssm_site,
+                agent_type=nssm_type,
+                description=nssm_desc,
+                mesh_node_id=mesh_node_id,
+                token=token,
+                version=version,
+            ).save()
+    except Exception as e:
+        sg.Popup(e)
 
     sleep(2)
 
@@ -382,111 +386,28 @@ def installagent():
     window_install.FindElement("install_text").Update("Authenticating with the RMM...")
     progress_bar_install.UpdateBar(75)
     window_install.FindElement("install_text").Update("Registering agent service...")
-    # install service
-    subprocess.run(
-        [
-            "C:\\Program Files\\TacticalAgent\\nssm.exe",
-            "install",
-            "tacticalagent",
-            "C:\\Program Files\\TacticalAgent\\winagent\\winagentsvc.exe",
-        ]
-    )
-    window_install.FindElement("install_text").Update("Settings service description...")
-    progress_bar_install.UpdateBar(80)
-    # set display name
-    subprocess.run(
-        [
-            "C:\\Program Files\\TacticalAgent\\nssm.exe",
-            "set",
-            "tacticalagent",
-            "DisplayName",
-            r"Tactical RMM Agent",
-        ]
-    )
-    window_install.FindElement("install_text").Update("Starting service...")
-    progress_bar_install.UpdateBar(90)
-    # set description
-    subprocess.run(
-        [
-            "C:\\Program Files\\TacticalAgent\\nssm.exe",
-            "set",
-            "tacticalagent",
-            "Description",
-            r"Tactical RMM Monitoring Agent",
-        ]
-    )
-    progress_bar_install.UpdateBar(95)
-    # start service
-    subprocess.run(
-        ["C:\\Program Files\\TacticalAgent\\nssm.exe", "start", "tacticalagent"]
-    )
 
-    # checkrunner
-    subprocess.run(
-        [
-            "C:\\Program Files\\TacticalAgent\\nssm.exe",
-            "install",
-            "checkrunner",
-            "C:\\Program Files\\TacticalAgent\\checkrunner\\checkrunner.exe",
-        ]
-    )
+    # install services
+    nssm = "C:\\Program Files\\TacticalAgent\\nssm.exe"
+    install_dir = "C:\\Program Files\\TacticalAgent"
+    services = ("winagentsvc", "checkrunner", "winupdater",)
 
-    subprocess.run(
-        [
-            "C:\\Program Files\\TacticalAgent\\nssm.exe",
-            "set",
-            "checkrunner",
-            "DisplayName",
-            r"Tactical Agent Check Runner",
-        ]
-    )
+    for svc in services:
+        # winagent
+        subprocess.run([nssm, "install", "tacticalagent", f"{install_dir}\\winagent\\{svc}.exe"])
+        subprocess.run([nssm, "set", "tacticalagent", "DisplayName", r"Tactical RMM Agent"])
+        subprocess.run([nssm, "set", "tacticalagent", "Description", r"Tactical RMM Monitoring Agent"])
+        subprocess.run([nssm, "start", "tacticalagent"])
+        # checkrunner
+        subprocess.run([nssm, "install", svc, f"{install_dir}\\{svc}\\{svc}.exe"])
+        subprocess.run([nssm, "set", svc, "DisplayName", r"Tactical Agent Check Runner"])
+        subprocess.run([nssm, "set", svc, "Description", r"Tactical Agent Background Check Runner"])
+        subprocess.run([nssm, "start", svc])
+        # winupdater
+        subprocess.run([nssm, "install", svc, f"{install_dir}\\{svc}\\{svc}.exe"])
+        subprocess.run([nssm, "set", svc, "DisplayName", r"Tactical Agent Windows Update"])
+        subprocess.run([nssm, "set", svc, "Description", r"Tactical Agent Background Windows Update Service"])
+        subprocess.run([nssm, "start", svc])
 
-    subprocess.run(
-        [
-            "C:\\Program Files\\TacticalAgent\\nssm.exe",
-            "set",
-            "checkrunner",
-            "Description",
-            r"Tactical RMM Agent Background Check Runner",
-        ]
-    )
-
-    subprocess.run(
-        ["C:\\Program Files\\TacticalAgent\\nssm.exe", "start", "checkrunner"]
-    )
-
-    # winupdater
-    subprocess.run(
-        [
-            "C:\\Program Files\\TacticalAgent\\nssm.exe",
-            "install",
-            "winupdater",
-            "C:\\Program Files\\TacticalAgent\\winupdater\\winupdater.exe",
-        ]
-    )
-
-    subprocess.run(
-        [
-            "C:\\Program Files\\TacticalAgent\\nssm.exe",
-            "set",
-            "winupdater",
-            "DisplayName",
-            r"Tactical Agent Windows Update",
-        ]
-    )
-
-    subprocess.run(
-        [
-            "C:\\Program Files\\TacticalAgent\\nssm.exe",
-            "set",
-            "winupdater",
-            "Description",
-            r"Tactical RMM Agent Background Windows Update Service",
-        ]
-    )
-
-    subprocess.run(
-        ["C:\\Program Files\\TacticalAgent\\nssm.exe", "start", "winupdater"]
-    )
     window_install.Close()
     sg.Popup("Installation was successfull!")
