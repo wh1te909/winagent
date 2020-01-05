@@ -315,6 +315,28 @@ def installagent():
     with open(version_file, "r") as vf:
         version = vf.read()
 
+    add_headers = {
+        "content-type": "application/json",
+        "Authorization": f"Token {token}",
+    }
+
+    add_payload = {
+        "agentid": unique_id,
+        "hostname": agent_hostname,
+        "client": nssm_client,
+        "site": nssm_site,
+        "mesh_node_id": mesh_node_id,
+        "description": nssm_desc,
+        "monitoring_type": nssm_type,
+    }
+
+    add_url = f"{rmm_url}/api/v1/add/"
+    add_resp = requests.post(add_url, json.dumps(add_payload), headers=add_headers)
+
+    if add_resp.status_code != 200:
+        sg.Popup("Error during installation")
+        raise SystemExit()
+
     try:
         with db:
             db.create_tables([AgentStorage])
@@ -328,36 +350,10 @@ def installagent():
                 mesh_node_id=mesh_node_id,
                 token=token,
                 version=version,
+                agentpk=add_resp.json()["pk"]
             ).save()
     except Exception as e:
         sg.Popup(e)
-
-    sleep(2)
-
-    with db:
-        astor = AgentStorage.select()[0]
-
-    add_headers = {
-        "content-type": "application/json",
-        "Authorization": f"Token {astor.token}",
-    }
-
-    add_payload = {
-        "agentid": astor.agentid,
-        "hostname": agent_hostname,
-        "client": astor.client,
-        "site": astor.site,
-        "mesh_node_id": astor.mesh_node_id,
-        "description": astor.description,
-        "monitoring_type": astor.agent_type,
-    }
-
-    add_url = f"{rmm_url}/api/v1/add/"
-    add_resp = requests.post(add_url, json.dumps(add_payload), headers=add_headers)
-
-    if add_resp.status_code != 200:
-        sg.Popup("Error during installation")
-        raise SystemExit()
 
     subprocess.run(
         [
@@ -390,24 +386,24 @@ def installagent():
     # install services
     nssm = "C:\\Program Files\\TacticalAgent\\nssm.exe"
     install_dir = "C:\\Program Files\\TacticalAgent"
-    services = ("winagentsvc", "checkrunner", "winupdater",)
 
-    for svc in services:
-        # winagent
-        subprocess.run([nssm, "install", "tacticalagent", f"{install_dir}\\winagent\\{svc}.exe"])
-        subprocess.run([nssm, "set", "tacticalagent", "DisplayName", r"Tactical RMM Agent"])
-        subprocess.run([nssm, "set", "tacticalagent", "Description", r"Tactical RMM Monitoring Agent"])
-        subprocess.run([nssm, "start", "tacticalagent"])
-        # checkrunner
-        subprocess.run([nssm, "install", svc, f"{install_dir}\\{svc}\\{svc}.exe"])
-        subprocess.run([nssm, "set", svc, "DisplayName", r"Tactical Agent Check Runner"])
-        subprocess.run([nssm, "set", svc, "Description", r"Tactical Agent Background Check Runner"])
-        subprocess.run([nssm, "start", svc])
-        # winupdater
-        subprocess.run([nssm, "install", svc, f"{install_dir}\\{svc}\\{svc}.exe"])
-        subprocess.run([nssm, "set", svc, "DisplayName", r"Tactical Agent Windows Update"])
-        subprocess.run([nssm, "set", svc, "Description", r"Tactical Agent Background Windows Update Service"])
-        subprocess.run([nssm, "start", svc])
+    # winagent
+    subprocess.run([nssm, "install", "tacticalagent", f"{install_dir}\\winagent\\winagentsvc.exe"])
+    subprocess.run([nssm, "set", "tacticalagent", "DisplayName", r"Tactical RMM Agent"])
+    subprocess.run([nssm, "set", "tacticalagent", "Description", r"Tactical RMM Monitoring Agent"])
+    subprocess.run([nssm, "start", "tacticalagent"])
+
+    # checkrunner
+    subprocess.run([nssm, "install", "checkrunner", f"{install_dir}\\checkrunner\\checkrunner.exe"])
+    subprocess.run([nssm, "set", "checkrunner", "DisplayName", r"Tactical Agent Check Runner"])
+    subprocess.run([nssm, "set", "checkrunner", "Description", r"Tactical Agent Background Check Runner"])
+    subprocess.run([nssm, "start", "checkrunner"])
+
+    # winupdater
+    subprocess.run([nssm, "install", "winupdater", f"{install_dir}\\winupdater\\winupdater.exe"])
+    subprocess.run([nssm, "set", "winupdater", "DisplayName", r"Tactical Agent Windows Update"])
+    subprocess.run([nssm, "set", "winupdater", "Description", r"Tactical Agent Background Windows Update Service"])
+    subprocess.run([nssm, "start", "winupdater"])
 
     window_install.Close()
     sg.Popup("Installation was successfull!")
