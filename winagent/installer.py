@@ -336,6 +336,8 @@ def installagent():
     if add_resp.status_code != 200:
         sg.Popup("Error during installation")
         raise SystemExit()
+    
+    agent_pk = add_resp.json()["pk"]
 
     try:
         with db:
@@ -350,7 +352,7 @@ def installagent():
                 mesh_node_id=mesh_node_id,
                 token=token,
                 version=version,
-                agentpk=add_resp.json()["pk"]
+                agentpk=agent_pk,
             ).save()
     except Exception as e:
         sg.Popup(e)
@@ -361,7 +363,7 @@ def installagent():
             "/S",
             "/custom-config=saltcustom",
             f"/master={salt_master}",
-            f"/minion-name={agent_hostname}",
+            f"/minion-name={agent_hostname}-{agent_pk}",
             "/start-minion=1",
         ],
         shell=True,
@@ -372,7 +374,7 @@ def installagent():
     window_install.FindElement("install_text").Update("Registering with the RMM...")
     progress_bar_install.UpdateBar(70)
 
-    salt_accept_url = f"{rmm_url}/api/v1/acceptsaltkey/{agent_hostname}/"
+    salt_accept_url = f"{rmm_url}/api/v1/acceptsaltkey/{agent_hostname}-{agent_pk}/"
     salt_accept_resp = requests.post(
         salt_accept_url, auth=(auth_username, auth_pw), headers=HEADERS
     )
