@@ -10,6 +10,7 @@ import validators
 import re
 import random
 import string
+import ctypes
 
 from models import db, AgentStorage
 
@@ -426,6 +427,10 @@ def show_status():
 
 
 if __name__ == "__main__":
+    if not ctypes.windll.shell32.IsUserAnAdmin():
+        sg.Popup("Must be run as administrator!")
+        raise SystemExit()
+
     try:
         service = psutil.win_service_get("tacticalagent")
     except psutil.NoSuchProcess:
