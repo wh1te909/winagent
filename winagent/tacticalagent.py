@@ -19,7 +19,7 @@ HEADERS = {"content-type": "application/json"}
 
 def rand_string(length):
     chars = string.ascii_letters
-    return ''.join(random.choice(chars) for i in range(length))
+    return "".join(random.choice(chars) for i in range(length))
 
 
 def install_agent():
@@ -181,7 +181,11 @@ def install_agent():
             )
         ],
         [sg.Text("Please select a site")],
-        [sg.InputCombo(sites, size=(25, 1), default_value=sites[0], key="site", readonly=True)],
+        [
+            sg.InputCombo(
+                sites, size=(25, 1), default_value=sites[0], key="site", readonly=True
+            )
+        ],
     ]
 
     mon_type_layout = [
@@ -325,7 +329,7 @@ def install_agent():
     if add_resp.status_code != 200:
         sg.Popup("Error during installation")
         raise SystemExit()
-    
+
     agent_pk = add_resp.json()["pk"]
 
     try:
@@ -379,21 +383,49 @@ def install_agent():
     install_dir = "C:\\Program Files\\TacticalAgent"
 
     # winagent
-    subprocess.run([nssm, "install", "tacticalagent", f"{install_dir}\\winagent\\winagentsvc.exe"])
+    subprocess.run(
+        [nssm, "install", "tacticalagent", f"{install_dir}\\winagent\\winagentsvc.exe"]
+    )
     subprocess.run([nssm, "set", "tacticalagent", "DisplayName", r"Tactical RMM Agent"])
-    subprocess.run([nssm, "set", "tacticalagent", "Description", r"Tactical RMM Monitoring Agent"])
+    subprocess.run(
+        [nssm, "set", "tacticalagent", "Description", r"Tactical RMM Monitoring Agent"]
+    )
     subprocess.run([nssm, "start", "tacticalagent"])
 
     # checkrunner
-    subprocess.run([nssm, "install", "checkrunner", f"{install_dir}\\checkrunner\\checkrunner.exe"])
-    subprocess.run([nssm, "set", "checkrunner", "DisplayName", r"Tactical Agent Check Runner"])
-    subprocess.run([nssm, "set", "checkrunner", "Description", r"Tactical Agent Background Check Runner"])
+    subprocess.run(
+        [nssm, "install", "checkrunner", f"{install_dir}\\checkrunner\\checkrunner.exe"]
+    )
+    subprocess.run(
+        [nssm, "set", "checkrunner", "DisplayName", r"Tactical Agent Check Runner"]
+    )
+    subprocess.run(
+        [
+            nssm,
+            "set",
+            "checkrunner",
+            "Description",
+            r"Tactical Agent Background Check Runner",
+        ]
+    )
     subprocess.run([nssm, "start", "checkrunner"])
 
     # winupdater
-    subprocess.run([nssm, "install", "winupdater", f"{install_dir}\\winupdater\\winupdater.exe"])
-    subprocess.run([nssm, "set", "winupdater", "DisplayName", r"Tactical Agent Windows Update"])
-    subprocess.run([nssm, "set", "winupdater", "Description", r"Tactical Agent Background Windows Update Service"])
+    subprocess.run(
+        [nssm, "install", "winupdater", f"{install_dir}\\winupdater\\winupdater.exe"]
+    )
+    subprocess.run(
+        [nssm, "set", "winupdater", "DisplayName", r"Tactical Agent Windows Update"]
+    )
+    subprocess.run(
+        [
+            nssm,
+            "set",
+            "winupdater",
+            "Description",
+            r"Tactical Agent Background Windows Update Service",
+        ]
+    )
     subprocess.run([nssm, "start", "winupdater"])
 
     window_install.Close()
@@ -413,9 +445,7 @@ def show_status():
     ]
 
     window_status = sg.Window(
-        "Tactical Agent",
-        size=(300, 100),
-        icon=os.path.join(os.getcwd(), "onit.ico"),
+        "Tactical Agent", size=(300, 100), icon=os.path.join(os.getcwd(), "onit.ico"),
     ).Layout(status_layout)
 
     while True:
