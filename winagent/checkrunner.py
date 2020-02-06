@@ -3,7 +3,7 @@ import requests
 from time import sleep
 from random import randrange
 
-from winutils import ping_check, run_asyncio_commands
+from winutils import ping_check, script_check, run_asyncio_commands
 from models import AgentStorage, db
 
 
@@ -30,7 +30,8 @@ def main():
             try:
                 data = resp.json()
                 pingchecks = data["pingchecks"]
-                interval = int(data["ping_check_interval"])
+                scriptchecks = data["scriptchecks"]
+                interval = int(data["check_interval"])
                 tasks = []
 
                 if pingchecks:
@@ -47,6 +48,33 @@ def main():
 
                     for ping in pings:
                         tasks.append(ping_check(ping))
+
+                if scriptchecks:
+                    scripts = []
+                    for check in scriptchecks:
+
+                        script_path = check["script"]["filepath"]
+                        shell = check["script"]["shell"]
+                        timeout = check["timeout"]
+
+                        scripts.append(
+                            {
+                                "cmd": [
+                                    "c:\\salt\\salt-call.bat",
+                                    "cmd.script",
+                                    script_path,
+                                    f"shell={shell}",
+                                    f"timeout={timeout}",
+                                    "--out=json",
+                                ],
+                                "id": check["id"],
+                                "token": astor.token,
+                                "server": astor.server,
+                            }
+                        )
+
+                    for script in scripts:
+                        tasks.append(script_check(script))
 
                 if tasks:
                     results = run_asyncio_commands(tasks, max_concurrent_tasks=20)

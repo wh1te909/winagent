@@ -11,6 +11,7 @@ import os
 import math
 import validators
 import asyncio
+import datetime as dt
 from collections import defaultdict
 from ctypes.wintypes import BYTE, WORD, DWORD, WCHAR
 
@@ -25,6 +26,56 @@ kernel32 = ctypes.WinDLL(str("kernel32"), use_last_error=True)
 def make_chunks(l, n):
     for i in range(0, len(l), n):
         yield l[i : i + n]
+
+
+async def script_check(cmd):
+    output = (
+        "Script started " + dt.datetime.now().strftime("%c") + "\n" + "-" * 40 + "\n"
+    )
+    retcode = 99
+    proc = await asyncio.create_subprocess_exec(
+        *cmd["cmd"], stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+    )
+
+    proc_stdout, proc_stderr = await proc.communicate()
+
+    if proc_stdout:
+        resp = json.loads(proc_stdout.decode("utf-8", errors="ignore"))
+        retcode = resp["local"]["retcode"]
+        out = resp["local"]["stdout"]
+        err = resp["local"]["stderr"]
+
+        if out:
+            output += resp["local"]["stdout"]
+
+        if err:
+            output += resp["local"]["stderr"]
+
+    if proc_stderr:
+        output += proc_stderr.decode("utf-8", errors="ignore")
+
+    output += (
+        "\n"
+        + "-" * 40
+        + "\nScript finished at "
+        + dt.datetime.now().strftime("%c")
+        + f"\nreturn code: {retcode}"
+    )
+
+    if retcode != 0:
+        status = "failing"
+    else:
+        status = "passing"
+
+    url = f"{cmd['server']}/checks/updatescriptcheck/"
+    headers = {
+        "content-type": "application/json",
+        "Authorization": f"Token {cmd['token']}",
+    }
+    payload = {"output": output, "status": status, "id": cmd["id"]}
+    resp = requests.patch(url, json.dumps(payload), headers=headers)
+
+    return status
 
 
 async def ping_check(cmd):
