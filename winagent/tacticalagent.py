@@ -64,12 +64,14 @@ def install_agent():
                 r"[0-9]+(?:\.[0-9]+){3}(:[0-9]+)?", auth_values["rmmurl"]
             )
             if not validators.domain(auth_values["rmmurl"]) and not ip_or_port:
-                sg.Popup(
-                    "ERROR: Please enter a valid domain name or IPv4 address\n \
-                    \nExamples:\n\n10.0.10.1\napi.example.com \
-                    \n10.0.10.1:8000\n \
-                    \nDo NOT put trailing slashes!\n"
+                validation_error = (
+                    "ERROR: Please enter a valid domain name or IPv4 address\n\n"
                 )
+                validation_error += (
+                    "Examples:\n\n10.0.10.1\napi.example.com\n10.0.10.1:8000"
+                )
+                validation_error += "\n\nDo NOT put trailing slashes!\n"
+                sg.Popup(validation_error)
                 continue
             if ip_or_port:
                 ip_stripped = auth_values["rmmurl"].split(":")[0]
@@ -367,14 +369,35 @@ def install_agent():
     window_install.FindElement("install_text").Update("Registering with the RMM...")
     progress_bar_install.UpdateBar(70)
 
-    salt_accept_url = f"{rmm_url}/api/v1/acceptsaltkey/{agent_hostname}-{agent_pk}/"
-    salt_accept_resp = requests.post(
-        salt_accept_url, auth=(auth_username, auth_pw), headers=HEADERS
-    )
+    salt_accept_url = f"{rmm_url}/api/v1/acceptsaltkey/"
+    accept_payload = {"saltid": f"{agent_hostname}-{agent_pk}"}
+    attempts = 0
+    accept_success = True
+
+    # make sure the salt minion is accepted on the master
+    # if not, warn that must manually accept the salt-key
+    while 1:
+        salt_accept_resp = requests.post(
+            salt_accept_url,
+            json.dumps(accept_payload),
+            auth=(auth_username, auth_pw),
+            headers=HEADERS,
+        )
+        if salt_accept_resp.status_code != 200:
+            attempts += 1
+            sleep(5)
+        else:
+            attempts = 0
+
+        if attempts == 0:
+            break
+        else:
+            if attempts > 20:
+                accept_success = False
+                break
 
     sleep(15)  # wait for salt to start
 
-    window_install.FindElement("install_text").Update("Authenticating with the RMM...")
     progress_bar_install.UpdateBar(75)
     window_install.FindElement("install_text").Update("Registering agent service...")
 
@@ -429,7 +452,15 @@ def install_agent():
     subprocess.run([nssm, "start", "winupdater"])
 
     window_install.Close()
-    sg.Popup("Installation was successfull!")
+
+    if not accept_success:
+        accept_popup = "The RMM was unable to accept the salt minion\n"
+        accept_popup += "Run the following command on the rmm:\n\n"
+        accept_popup += f"sudo salt-key -y -a '{agent_hostname}-{agent_pk}'\n"
+        sg.Popup(accept_popup)
+        sg.Popup("Installation finished!")
+    else:
+        sg.Popup("Installation was successfull!")
 
 
 def show_status():
