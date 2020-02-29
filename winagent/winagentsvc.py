@@ -24,7 +24,6 @@ def main():
         "hostname": socket.gethostname(),
         "operating_system": winutils.get_os(),
         "total_ram": winutils.get_total_ram(),
-        "cpu_info": winutils.get_cpu_info(),
         "platform": platform.system().lower(),
         "platform_release": winutils.get_platform_release(),
         "version": astor.version,

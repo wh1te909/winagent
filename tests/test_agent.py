@@ -53,10 +53,6 @@ def test_total_ram():
     assert type(winutils.get_total_ram()) is int
 
 
-def test_cpu_info():
-    assert type(winutils.get_cpu_info()) is list
-
-
 def test_services():
     if "TRAVIS" in os.environ:
         assert 1 == 1
@@ -71,10 +67,6 @@ def test_services():
 def test_disks():
     disks = winutils.get_disks()
     assert disks["C:"]["device"] == "C:"
-
-
-def test_cpu_info():
-    assert type(winutils.get_cpu_info()[0]["physical_cores"]) is int
 
 
 def test_os():

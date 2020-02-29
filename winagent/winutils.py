@@ -247,25 +247,6 @@ def get_os():
     return op_sys
 
 
-def get_cpu_info():
-    try:
-        root_winmgmts = GetObject("winmgmts:root\cimv2")
-        cpus = root_winmgmts.ExecQuery("Select * from Win32_Processor")
-        cpu_info = []
-        for i, item in enumerate(cpus):
-            cpu_info.append(
-                {
-                    "name": cpus[i].Name,
-                    "physical_cores": cpus[i].NumberOfCores,
-                    "logical_cores": cpus[i].NumberOfLogicalProcessors,
-                }
-            )
-    except Exception:
-        cpu_info = [{"error": "error getting cpu info"}]
-
-    return cpu_info
-
-
 def bytes2human(n):
     # http://code.activestate.com/recipes/578019
     symbols = ("K", "M", "G", "T", "P", "E", "Z", "Y")
