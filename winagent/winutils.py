@@ -193,11 +193,9 @@ def get_total_ram():
 
 def get_logged_on_user():
     try:
-        user = psutil.users()[0].name
+        return psutil.users()[0].name
     except Exception:
-        user = "None"
-
-    return user
+        return "None"
 
 
 def get_public_ip():
@@ -236,16 +234,10 @@ def get_cmd_output(cmd):
 
 def get_os():
     try:
-        c = wmi.WMI()
-        for os in c.Win32_OperatingSystem():
-            op_sys = (
-                f"{os.Caption}, {platform.architecture()[0]} (build {os.BuildNumber})"
-            )
+        os = wmi.WMI().Win32_OperatingSystem()[0]
+        return f"{os.Caption}, {platform.architecture()[0]} (build {os.BuildNumber})"
     except Exception:
-        op_sys = "unknown-os"
-
-    return op_sys
-
+        return "unknown-os"
 
 def bytes2human(n):
     # http://code.activestate.com/recipes/578019
@@ -380,33 +372,23 @@ def get_platform_release():
     return plat_release
 
 
-def get_needs_reboot():
-
-    if os.path.exists("c:\\salt\\salt-call.bat"):
+def salt_call_ret_bool(cmd):
+    try:
         r = subprocess.run(
             [
                 "c:\\salt\\salt-call.bat",
-                "win_wua.get_needs_reboot",
+                cmd,
                 "--local",
                 "--out=json",
             ],
             capture_output=True,
         )
+    except Exception:
+        return False
     else:
-        try:
-            r = subprocess.run(
-                ["salt-call", "win_wua.get_needs_reboot", "--local", "--out=json"],
-                shell=True,
-                capture_output=True,
-            )
-        except Exception:
+        ret = json.loads(r.stdout.decode("utf-8", errors="ignore"))
+        if ret["local"]:
+            return True
+        else:
             return False
 
-    if r.stderr:
-        return False
-
-    ret = json.loads(r.stdout.decode("utf-8", errors="ignore"))
-    if ret["local"]:
-        return True
-
-    return False

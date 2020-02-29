@@ -7,7 +7,7 @@ from time import sleep
 import datetime as dt
 
 from models import AgentStorage, db
-from winutils import get_needs_reboot
+from winutils import salt_call_ret_bool
 
 logging.basicConfig(
     filename="update.log",
@@ -122,7 +122,7 @@ if __name__ == "__main__":
                         # trigger a patch scan once all updates finish installing, and check if reboot needed
                         done_payload = {
                             "agentid": astor.agentid,
-                            "reboot": get_needs_reboot(),
+                            "reboot": salt_call_ret_bool("win_wua.get_needs_reboot"),
                         }
                         requests.patch(
                             scan_url,
