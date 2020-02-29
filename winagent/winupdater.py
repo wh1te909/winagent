@@ -17,41 +17,18 @@ logging.basicConfig(
 
 
 def install_update(kb):
-
-    if os.path.exists("c:\\salt\\salt-call.bat"):
-        r = subprocess.run(
-            [
-                "c:\\salt\\salt-call.bat",
-                "win_wua.get",
-                f"{kb}",
-                "download=True",
-                "install=True",
-                "--local",
-                "--out=json",
-            ],
-            capture_output=True,
-        )
-    else:
-        try:
-            r = subprocess.run(
-                [
-                    "salt-call",
-                    "win_wua.get",
-                    f"{kb}",
-                    "download=True",
-                    "install=True",
-                    "--local",
-                    "--out=json",
-                ],
-                shell=True,
-                capture_output=True,
-            )
-
-        except Exception:
-            return "error"
-
-    if r.stderr:
-        return "error"
+    r = subprocess.run(
+        [
+            "c:\\salt\\salt-call.bat",
+            "win_wua.get",
+            f"{kb}",
+            "download=True",
+            "install=True",
+            "--local",
+            "--out=json",
+        ],
+        capture_output=True,
+    )
 
     return r.stdout.decode("utf-8", errors="ignore")
 
@@ -96,21 +73,18 @@ if __name__ == "__main__":
                             install = install_update(kb)
                             logging.info(install)
                             res_payload = {"agentid": astor.agentid, "kb": kb}
-
-                            if install == "error":
-                                res_payload.update({"results": "error"})
+                            status = json.loads(install)
+                            
+                            if (
+                                status["local"]["Install"]["Updates"]
+                                == "Nothing to install"
+                            ):
+                                res_payload.update({"results": "alreadyinstalled"})
                             else:
-                                status = json.loads(install)
-                                if (
-                                    status["local"]["Install"]["Updates"]
-                                    == "Nothing to install"
-                                ):
-                                    res_payload.update({"results": "alreadyinstalled"})
+                                if status["local"]["Install"]["Success"]:
+                                    res_payload.update({"results": "success"})
                                 else:
-                                    if status["local"]["Install"]["Success"]:
-                                        res_payload.update({"results": "success"})
-                                    else:
-                                        res_payload.update({"results": "failed"})
+                                    res_payload.update({"results": "failed"})
 
                             requests.patch(
                                 results_url,
