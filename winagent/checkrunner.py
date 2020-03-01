@@ -56,22 +56,39 @@ def main():
                         script_path = check["script"]["filepath"]
                         shell = check["script"]["shell"]
                         timeout = check["timeout"]
+                        script_filename = check["script"]["filename"]
 
-                        scripts.append(
-                            {
-                                "cmd": [
-                                    "c:\\salt\\salt-call.bat",
-                                    "cmd.script",
-                                    script_path,
-                                    f"shell={shell}",
-                                    f"timeout={timeout}",
-                                    "--out=json",
-                                ],
-                                "id": check["id"],
-                                "token": astor.token,
-                                "server": astor.server,
-                            }
-                        )
+                        if shell == "python":
+                            scripts.append(
+                                {
+                                    "cmd": [
+                                        "c:\\salt\\salt-call.bat",
+                                        "run_python.run_python_script",
+                                        script_filename,
+                                        f"timeout={timeout}",
+                                        "--out=json",
+                                    ],
+                                    "id": check["id"],
+                                    "token": astor.token,
+                                    "server": astor.server,
+                                }
+                            )
+                        else:
+                            scripts.append(
+                                {
+                                    "cmd": [
+                                        "c:\\salt\\salt-call.bat",
+                                        "cmd.script",
+                                        script_path,
+                                        f"shell={shell}",
+                                        f"timeout={timeout}",
+                                        "--out=json",
+                                    ],
+                                    "id": check["id"],
+                                    "token": astor.token,
+                                    "server": astor.server,
+                                }
+                            )
 
                     for script in scripts:
                         tasks.append(script_check(script))

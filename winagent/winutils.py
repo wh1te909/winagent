@@ -46,10 +46,10 @@ async def script_check(cmd):
         err = resp["local"]["stderr"]
 
         if out:
-            output += resp["local"]["stdout"]
+            output += "STDOUT:\n" + resp["local"]["stdout"]
 
         if err:
-            output += resp["local"]["stderr"]
+            output += "\nSTDERR:\n" + resp["local"]["stderr"]
 
     if proc_stderr:
         output += proc_stderr.decode("utf-8", errors="ignore")
