@@ -63,10 +63,9 @@ def main():
                                 {
                                     "cmd": [
                                         "c:\\salt\\salt-call.bat",
-                                        "run_python.run_python_script",
+                                        "win_agent.run_python_script",
                                         script_filename,
                                         f"timeout={timeout}",
-                                        "--out=json",
                                     ],
                                     "id": check["id"],
                                     "token": astor.token,
@@ -82,7 +81,6 @@ def main():
                                         script_path,
                                         f"shell={shell}",
                                         f"timeout={timeout}",
-                                        "--out=json",
                                     ],
                                     "id": check["id"],
                                     "token": astor.token,

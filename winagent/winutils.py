@@ -379,7 +379,6 @@ def salt_call_ret_bool(cmd):
                 "c:\\salt\\salt-call.bat",
                 cmd,
                 "--local",
-                "--out=json",
             ],
             capture_output=True,
         )

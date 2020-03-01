@@ -25,7 +25,6 @@ def install_update(kb):
             "download=True",
             "install=True",
             "--local",
-            "--out=json",
         ],
         capture_output=True,
     )
