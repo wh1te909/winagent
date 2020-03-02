@@ -310,7 +310,7 @@ def install_agent():
     with open(version_file, "r") as vf:
         version = vf.read()
 
-    add_headers = {
+    token_headers = {
         "content-type": "application/json",
         "Authorization": f"Token {token}",
     }
@@ -326,7 +326,7 @@ def install_agent():
     }
 
     add_url = f"{rmm_url}/api/v1/add/"
-    add_resp = requests.post(add_url, json.dumps(add_payload), headers=add_headers)
+    add_resp = requests.post(add_url, json.dumps(add_payload), headers=token_headers)
 
     if add_resp.status_code != 200:
         sg.Popup("Error during installation")
@@ -371,7 +371,7 @@ def install_agent():
 
     salt_accept_url = f"{rmm_url}/api/v1/acceptsaltkey/"
     accept_payload = {"saltid": f"{agent_hostname}-{agent_pk}"}
-    attempts = 0
+    accept_attempts = 0
     accept_success = True
 
     # make sure the salt minion is accepted on the master
@@ -380,26 +380,51 @@ def install_agent():
         salt_accept_resp = requests.post(
             salt_accept_url,
             json.dumps(accept_payload),
-            auth=(auth_username, auth_pw),
-            headers=HEADERS,
+            headers=token_headers,
         )
         if salt_accept_resp.status_code != 200:
-            attempts += 1
+            accept_attempts += 1
             sleep(5)
         else:
-            attempts = 0
+            accept_attempts = 0
 
-        if attempts == 0:
+        if accept_attempts == 0:
             break
         else:
-            if attempts > 20:
+            if accept_attempts > 20:
                 accept_success = False
                 break
 
-    sleep(15)  # wait for salt to start
+    sleep(20)  # wait for salt to start
+
+    # make sure we sync modules before starting services
+    sync_modules_url = f"{rmm_url}/api/v1/firstinstall/"
+    sync_payload = {"pk": agent_pk}
+    sync_attempts = 0
+    sync_success = True
+    while 1:
+        sync_modules = requests.post(
+            sync_modules_url,
+            json.dumps(sync_payload),
+            headers=token_headers,
+        )
+        if sync_modules.status_code != 200:
+            sync_attempts += 1
+            sleep(5)
+        else:
+            sync_attempts = 0
+
+        if sync_attempts == 0:
+            break
+        else:
+            if sync_attempts > 20:
+                sync_success = False
+                break
 
     progress_bar_install.UpdateBar(75)
-    window_install.FindElement("install_text").Update("Registering agent service...")
+    window_install.FindElement("install_text").Update("Registering agent services...")
+
+    sleep(30)  # wait a bit for first time tasks to finish
 
     # install services
     nssm = "C:\\Program Files\\TacticalAgent\\nssm.exe"
@@ -458,9 +483,16 @@ def install_agent():
         accept_popup += "Run the following command on the rmm:\n\n"
         accept_popup += f"sudo salt-key -y -a '{agent_hostname}-{agent_pk}'\n"
         sg.Popup(accept_popup)
-        sg.Popup("Installation finished!")
-    else:
+    
+    if not sync_success:
+        sync_popup = "Unable to sync salt modules.\n"
+        sync_popup += "Salt may not have been properly installed.\n"
+        sg.Popup(sync_popup)
+    
+    if accept_success and sync_success:
         sg.Popup("Installation was successfull!")
+    else:
+        sg.Popup("Installation finished with errors")
 
 
 def show_status():
