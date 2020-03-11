@@ -16,11 +16,8 @@ python -m venv env
 python -m pip install --upgrade pip
 pip install -r requirements.txt
 cd winagent
-pyinstaller --clean --noconsole --icon=onit.ico .\tacticalagent.py
-pyinstaller --clean --noconsole --icon=onit.ico .\winagentsvc.py
-pyinstaller --clean --noconsole --icon=onit.ico .\checkrunner.py
-pyinstaller --clean --noconsole --icon=onit.ico .\winupdater.py
-pyinstaller --clean --noconsole --onefile --icon=onit.ico .\cleanup.py
+pyinstaller --clean --noconsole --icon=..\bin\onit.ico .\tacticalrmm.py
+pyinstaller --clean --noconsole --onefile --icon=..\bin\onit.ico .\cleanup.py
 ```
 
 Download and install [Inno Setup](http://jrsoftware.org/isinfo.php)

@@ -1,8 +1,8 @@
 #define MyAppName "Tactical RMM Agent"
-#define MyAppVersion "v0.2.8"
+#define MyAppVersion "v0.3.0"
 #define MyAppPublisher "wh1te909"
 #define MyAppURL "https://github.com/wh1te909"
-#define MyAppExeName "tacticalagent.exe"
+#define MyAppExeName "tacticalrmm.exe"
 #define NSSM "nssm.exe"
 #define MESHEXE "meshagent.exe"
 #define SALTUNINSTALL "c:\salt\uninst.exe"
@@ -22,8 +22,8 @@ DefaultDirName="C:\Program Files\TacticalAgent"
 DisableDirPage=yes
 DisableProgramGroupPage=yes
 OutputBaseFilename=winagent-{#MyAppVersion}
-SetupIconFile=C:\Users\Public\Documents\tacticalagent\winagent\onit.ico
-WizardSmallImageFile=C:\Users\Public\Documents\tacticalagent\winagent\onit.bmp
+SetupIconFile=C:\Users\Public\Documents\tacticalagent\bin\onit.ico
+WizardSmallImageFile=C:\Users\Public\Documents\tacticalagent\bin\onit.bmp
 UninstallDisplayIcon={app}\{#MyAppExeName}
 Compression=lzma
 SolidCompression=yes
@@ -37,16 +37,12 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 
 [Files]
 Source: "C:\Users\Public\Documents\tacticalagent\VERSION"; DestDir: "{app}";
-Source: "C:\Users\Public\Documents\tacticalagent\winagent\dist\tacticalagent\tacticalagent.exe"; DestDir: "{app}";
-Source: "C:\Users\Public\Documents\tacticalagent\winagent\dist\tacticalagent\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs
-Source: "C:\Users\Public\Documents\tacticalagent\winagent\dist\winagentsvc\*"; DestDir: "{app}\winagent"; Flags: recursesubdirs createallsubdirs
-Source: "C:\Users\Public\Documents\tacticalagent\winagent\dist\checkrunner\*"; DestDir: "{app}\checkrunner"; Flags: recursesubdirs createallsubdirs
-Source: "C:\Users\Public\Documents\tacticalagent\winagent\dist\winupdater\*"; DestDir: "{app}\winupdater"; Flags: recursesubdirs createallsubdirs
+Source: "C:\Users\Public\Documents\tacticalagent\winagent\dist\tacticalrmm\tacticalrmm.exe"; DestDir: "{app}";
+Source: "C:\Users\Public\Documents\tacticalagent\winagent\dist\tacticalrmm\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs
 Source: "C:\Users\Public\Documents\tacticalagent\bin\nssm.exe"; DestDir: "{app}";
-Source: "C:\Users\Public\Documents\tacticalagent\winagent\saltcustom"; DestDir: "{app}";
-Source: "C:\Users\Public\Documents\tacticalagent\bin\salt-minion-setup.exe"; DestDir: "{app}";
+Source: "C:\Users\Public\Documents\tacticalagent\bin\saltcustom"; DestDir: "{app}";
 Source: "C:\Users\Public\Documents\tacticalagent\winagent\dist\cleanup.exe"; DestDir: "{app}";
-Source: "C:\Users\Public\Documents\tacticalagent\winagent\onit.ico"; DestDir: "{app}";
+Source: "C:\Users\Public\Documents\tacticalagent\bin\onit.ico"; DestDir: "{app}";
 
 [Icons]
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
@@ -67,9 +63,6 @@ Filename: "{app}\{#MESHEXE}"; Parameters: "-fulluninstall"; RunOnceId: "meshrm";
 Filename: "{app}\{#CLEANUPAGENT}"; RunOnceId: "cleanuprm";
 
 [UninstallDelete]
-Type: filesandordirs; Name: "{app}\winagent";
-Type: filesandordirs; Name: "{app}\checkrunner";
-Type: filesandordirs; Name: "{app}\winupdater";
 Type: filesandordirs; Name: "{app}";
 Type: filesandordirs; Name: "{#SALTDIR}";
 
