@@ -5,7 +5,7 @@ import json
 import shutil
 from time import sleep
 
-AGENT_DB = "C:\\Program Files\\TacticalAgent\\winagent\\agentdb.db"
+AGENT_DB = "C:\\Program Files\\TacticalAgent\\agentdb.db"
 
 
 def db_connect(db_path=AGENT_DB):
@@ -25,24 +25,11 @@ headers = {"content-type": "application/json", "Authorization": f"Token {token}"
 
 url = f"{server}/api/v1/deleteagent/"
 requests.post(url, json.dumps(payload), headers=headers)
-
-
 sleep(1)
-try:
-    shutil.rmtree("C:\\salt")
-except Exception:
-    pass
-finally:
-    sleep(1)
 
 try:
+    shutil.rmtree("C:\\salt")
+    sleep(1)
     os.system('rmdir /S /Q "{}"'.format("C:\\salt"))
-except Exception:
-    pass
-finally:
-    sleep(1)
-
-try:
-    shutil.rmtree("C:\\salt")
 except Exception:
     pass
