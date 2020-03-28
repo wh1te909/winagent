@@ -14,10 +14,10 @@ git clone https://github.com/wh1te909/winagent.git .
 python -m venv env
 .\env\Scripts\Activate.ps1
 python -m pip install --upgrade pip
-pip install -r requirements.txt
+pip install --no-cache-dir -r requirements.txt
 cd winagent
-pyinstaller --clean --noconsole --icon=..\bin\onit.ico .\tacticalrmm.py
-pyinstaller --clean --noconsole --onefile --icon=..\bin\onit.ico .\cleanup.py
+pyinstaller --clean --noconsole --uac-admin --icon=..\bin\onit.ico .\tacticalrmm.py
+pyinstaller --clean --noconsole --onefile --uac-admin --icon=..\bin\onit.ico .\cleanup.py
 ```
 
 Download and install [Inno Setup](http://jrsoftware.org/isinfo.php)
