@@ -2,18 +2,10 @@ import subprocess
 import json
 import requests
 import os
-import logging
 from time import sleep
 import datetime as dt
 
 from agent import WindowsAgent
-
-
-logging.basicConfig(
-    filename="update.log",
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-)
 
 
 class WinUpdater(WindowsAgent):
@@ -67,7 +59,7 @@ class WinUpdater(WindowsAgent):
                             for patch in resp.json():
                                 kb = patch["kb"]
                                 install = self.install_update(kb)
-                                logging.info(install)
+                                self.logger.info(install)
                                 res_payload = {"agentid": self.astor.agentid, "kb": kb}
                                 status = json.loads(install)
 
@@ -104,5 +96,5 @@ class WinUpdater(WindowsAgent):
                             )
 
                     except Exception as e:
-                        logging.error(e)
+                        self.logger.error(e)
             sleep(180)

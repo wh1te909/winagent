@@ -24,6 +24,16 @@ if __name__ == "__main__":
 
         agent = WinUpdater()
         agent.run()
+    elif args.mode == "updatesalt":
+        from agent import WindowsAgent
+
+        agent = WindowsAgent()
+        agent.update_salt()
+    elif args.mode == "cleanup":
+        from agent import WindowsAgent
+
+        agent = WindowsAgent()
+        agent.cleanup()
     else:
         import PySimpleGUI as sg
         import psutil

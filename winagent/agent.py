@@ -15,6 +15,9 @@ import asyncio
 import datetime as dt
 from collections import defaultdict
 from peewee import *
+import logging
+from time import sleep
+import shutil
 from ctypes.wintypes import BYTE, WORD, DWORD, WCHAR
 
 kernel32 = ctypes.WinDLL(str("kernel32"), use_last_error=True)
@@ -32,6 +35,8 @@ class AgentStorage(Model):
     token = CharField()
     version = CharField()
     agentpk = IntegerField()
+    salt_master = CharField()
+    salt_id = CharField()
 
     class Meta:
         database = db
@@ -176,10 +181,20 @@ class WindowsAgent:
         self.hostname = socket.gethostname()
         self.platform = platform.system().lower()
         self.astor = self.get_db()
+        self.programdir = "C:\\Program Files\\TacticalAgent"
         self.headers = {
             "content-type": "application/json",
             "Authorization": f"Token {self.astor.token}",
         }
+        logging.basicConfig(
+            filename=os.path.join(self.programdir, "winagent.log"),
+            level=logging.INFO,
+            format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        )
+        self.logger = logging.getLogger(__name__)
+        self.salt_minion_exe = (
+            "https://github.com/wh1te909/winagent/raw/master/bin/salt-minion-setup.exe"
+        )
 
     async def script_check(self, cmd):
         output = (
@@ -399,3 +414,62 @@ class WindowsAgent:
                 return True
             else:
                 return False
+
+    def update_salt(self):
+        self.logger.info("Updating salt")
+
+        minion_file = os.path.join(self.programdir, "salt-minion-setup.exe")
+        if os.path.exists(minion_file):
+            os.remove(minion_file)
+
+        services = (
+            "checkrunner",
+            "winupdater",
+        )
+        for svc in services:
+            subprocess.run(["sc", "stop", svc])
+
+        get_minion = requests.get(self.salt_minion_exe, stream=True,)
+        if get_minion.status_code != 200:
+            self.logger.error("Unable to download salt-minion")
+            return False
+
+        with open(minion_file, "wb") as f:
+            for chunk in get_minion.iter_content(chunk_size=1024):
+                if chunk:
+                    f.write(chunk)
+
+        del get_minion
+
+        r = subprocess.run(
+            [
+                "salt-minion-setup.exe",
+                "/S",
+                "/custom-config=saltcustom",
+                f"/master={self.astor.salt_master}",
+                f"/minion-name={self.astor.salt_id}",
+                "/start-minion=1",
+            ],
+            cwd=self.programdir,
+        )
+
+        sleep(10)
+        for svc in services:
+            subprocess.run(["sc", "start", svc])
+
+        self.logger.info(f"Salt was updated, return code: {r.returncode}")
+        return True
+
+    def cleanup(self):
+        payload = {"agentid": self.astor.agentid}
+
+        url = f"{self.astor.server}/api/v1/deleteagent/"
+        requests.post(url, json.dumps(payload), headers=self.headers)
+        sleep(1)
+
+        try:
+            shutil.rmtree("C:\\salt")
+            sleep(1)
+            os.system('rmdir /S /Q "{}"'.format("C:\\salt"))
+        except Exception:
+            pass

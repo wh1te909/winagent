@@ -16,15 +16,19 @@ from agent import db, AgentStorage
 
 class Installer:
     def __init__(self):
+        self.programdir = "C:\\Program Files\\TacticalAgent"
         self.headers = {"content-type": "application/json"}
-        self.icon = os.path.join(os.getcwd(), "onit.ico")
+        self.icon = os.path.join(self.programdir, "onit.ico")
         self.agent_hostname = socket.gethostname()
         self.version = self.get_version()
         self.set_theme()
+        self.nssm = os.path.join(self.programdir, "nssm.exe")
+        self.tacticalrmm = os.path.join(self.programdir, "tacticalrmm.exe")
         self.rmm_url = ""
         self.auth_username = ""
         self.auth_pw = ""
         self.salt_master = ""
+        self.salt_id = ""
         self.unique_id = ""
         self.token = ""
         self.agent_client = ""
@@ -47,7 +51,7 @@ class Installer:
         return "".join(random.choice(chars) for i in range(35))
 
     def get_version(self):
-        version_file = os.path.join(os.getcwd(), "VERSION")
+        version_file = os.path.join(self.programdir, "VERSION")
         with open(version_file, "r") as vf:
             version = vf.read()
 
@@ -318,7 +322,7 @@ class Installer:
             gui_queue.put("installerror")
             return False
 
-        minion_file = "C:\\Program Files\\TacticalAgent\\salt-minion-setup.exe"
+        minion_file = os.path.join(self.programdir, "salt-minion-setup.exe")
         with open(minion_file, "wb") as mout_file:
             for mchunk in get_minion.iter_content(chunk_size=1024):
                 if mchunk:
@@ -342,7 +346,7 @@ class Installer:
             gui_queue.put("installerror")
             return False
 
-        mesh_file = "C:\\Program Files\\TacticalAgent\\meshagent.exe"
+        mesh_file = os.path.join(self.programdir, "meshagent.exe")
 
         with open(mesh_file, "wb") as out_file:
             for chunk in get_mesh_exe.iter_content(chunk_size=1024):
@@ -406,6 +410,7 @@ class Installer:
 
         agent_pk = add_resp.json()["pk"]
         self.agent_pk = agent_pk
+        self.salt_id = f"{self.agent_hostname}-{self.agent_pk}"
 
         try:
             with db:
@@ -421,6 +426,8 @@ class Installer:
                     token=self.token,
                     version=self.version,
                     agentpk=self.agent_pk,
+                    salt_master=self.salt_master,
+                    salt_id=self.salt_id,
                 ).save()
         except Exception as e:
             print(f"ERROR: {e}")
@@ -433,7 +440,7 @@ class Installer:
         print("Installing salt...")
         subprocess.run(
             [
-                "C:\\Program Files\\TacticalAgent\\salt-minion-setup.exe",
+                os.path.join(self.programdir, "salt-minion-setup.exe"),
                 "/S",
                 "/custom-config=saltcustom",
                 f"/master={self.salt_master}",
@@ -501,83 +508,86 @@ class Installer:
 
     def install_services(self):
         print("Installing services...")
-        nssm = "C:\\Program Files\\TacticalAgent\\nssm.exe"
-        install_dir = "C:\\Program Files\\TacticalAgent"
 
         # winagent
         subprocess.run(
             [
-                nssm,
+                self.nssm,
                 "install",
                 "tacticalagent",
-                f"{install_dir}\\tacticalrmm.exe",
+                self.tacticalrmm,
                 "-m",
                 "winagentsvc",
             ]
         )
         subprocess.run(
-            [nssm, "set", "tacticalagent", "DisplayName", r"Tactical RMM Agent"]
+            [self.nssm, "set", "tacticalagent", "DisplayName", r"Tactical RMM Agent"]
         )
         subprocess.run(
             [
-                nssm,
+                self.nssm,
                 "set",
                 "tacticalagent",
                 "Description",
                 r"Tactical RMM Monitoring Agent",
             ]
         )
-        subprocess.run([nssm, "start", "tacticalagent"])
+        subprocess.run([self.nssm, "start", "tacticalagent"])
 
         # checkrunner
         subprocess.run(
             [
-                nssm,
+                self.nssm,
                 "install",
                 "checkrunner",
-                f"{install_dir}\\tacticalrmm.exe",
+                self.tacticalrmm,
                 "-m",
                 "checkrunner",
             ]
         )
         subprocess.run(
-            [nssm, "set", "checkrunner", "DisplayName", r"Tactical Agent Check Runner"]
+            [
+                self.nssm,
+                "set",
+                "checkrunner",
+                "DisplayName",
+                r"Tactical Agent Check Runner",
+            ]
         )
         subprocess.run(
             [
-                nssm,
+                self.nssm,
                 "set",
                 "checkrunner",
                 "Description",
                 r"Tactical Agent Background Check Runner",
             ]
         )
-        subprocess.run([nssm, "start", "checkrunner"])
+        subprocess.run([self.nssm, "start", "checkrunner"])
 
         # winupdater
         subprocess.run(
+            [self.nssm, "install", "winupdater", self.tacticalrmm, "-m", "winupdater",]
+        )
+        subprocess.run(
             [
-                nssm,
-                "install",
+                self.nssm,
+                "set",
                 "winupdater",
-                f"{install_dir}\\tacticalrmm.exe",
-                "-m",
-                "winupdater",
+                "DisplayName",
+                r"Tactical Agent Windows Update",
             ]
         )
         subprocess.run(
-            [nssm, "set", "winupdater", "DisplayName", r"Tactical Agent Windows Update"]
-        )
-        subprocess.run(
             [
-                nssm,
+                self.nssm,
                 "set",
                 "winupdater",
                 "Description",
                 r"Tactical Agent Background Windows Update Service",
             ]
         )
-        subprocess.run([nssm, "start", "winupdater"])
+        subprocess.run([self.nssm, "start", "winupdater"])
         return True
 
     def finish(self):
