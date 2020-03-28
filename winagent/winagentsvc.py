@@ -13,6 +13,7 @@ class WinAgentSvc(WindowsAgent):
         self.hello_url = f"{self.astor.server}/api/v1/hello/"
 
     def run(self):
+        self.logger.info("Agent started.")
         info = {
             "agentid": self.astor.agentid,
             "hostname": self.hostname,

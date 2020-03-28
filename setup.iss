@@ -1,5 +1,5 @@
 #define MyAppName "Tactical RMM Agent"
-#define MyAppVersion "v0.3.0"
+#define MyAppVersion "v0.3.1"
 #define MyAppPublisher "wh1te909"
 #define MyAppURL "https://github.com/wh1te909"
 #define MyAppExeName "tacticalrmm.exe"
@@ -7,7 +7,6 @@
 #define MESHEXE "meshagent.exe"
 #define SALTUNINSTALL "c:\salt\uninst.exe"
 #define SALTDIR "c:\salt"
-#define CLEANUPAGENT "cleanup.exe"
 
 [Setup]
 AppId={{0D34D278-5FAF-4159-A4A0-4E2D2C08139D}
@@ -41,7 +40,6 @@ Source: "C:\Users\Public\Documents\tacticalagent\winagent\dist\tacticalrmm\tacti
 Source: "C:\Users\Public\Documents\tacticalagent\winagent\dist\tacticalrmm\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs
 Source: "C:\Users\Public\Documents\tacticalagent\bin\nssm.exe"; DestDir: "{app}";
 Source: "C:\Users\Public\Documents\tacticalagent\bin\saltcustom"; DestDir: "{app}";
-Source: "C:\Users\Public\Documents\tacticalagent\winagent\dist\cleanup.exe"; DestDir: "{app}";
 Source: "C:\Users\Public\Documents\tacticalagent\bin\onit.ico"; DestDir: "{app}";
 
 [Icons]
@@ -60,7 +58,7 @@ Filename: "{app}\{#NSSM}"; Parameters: "stop winupdater"; RunOnceId: "stopwinupd
 Filename: "{app}\{#NSSM}"; Parameters: "remove winupdater confirm"; RunOnceId: "removewinupdate";
 Filename: "{#SALTUNINSTALL}"; Parameters: "/S"; RunOnceId: "saltrm";
 Filename: "{app}\{#MESHEXE}"; Parameters: "-fulluninstall"; RunOnceId: "meshrm";
-Filename: "{app}\{#CLEANUPAGENT}"; RunOnceId: "cleanuprm";
+Filename: "{app}\{#MyAppExeName}"; Parameters: "-m cleanup"; RunOnceId: "cleanuprm";
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}";
