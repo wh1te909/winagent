@@ -14,6 +14,8 @@ class WinAgentSvc(WindowsAgent):
 
     def run(self):
         self.logger.info("Agent started.")
+        # wait a bit before starting otherwise boot_time will be inaccurate
+        sleep(randrange(start=10, stop=20))
         info = {
             "agentid": self.astor.agentid,
             "hostname": self.hostname,
