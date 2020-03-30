@@ -14,15 +14,17 @@ class WinAgentSvc(WindowsAgent):
 
     def run(self):
         self.logger.info("Agent started.")
+        # wait a bit before starting otherwise boot_time will be inaccurate
+        sleep(randrange(start=10, stop=20))
         info = {
-            "agentid": self.astor.agentid,
+            "agent_id": self.astor.agentid,
             "hostname": self.hostname,
             "operating_system": self.get_os(),
             "total_ram": self.get_total_ram(),
-            "platform": self.platform,
-            "platform_release": self.get_platform_release(),
+            "plat": self.platform,
+            "plat_release": self.get_platform_release(),
             "version": self.astor.version,
-            "av": self.get_av(),
+            "antivirus": self.get_av(),
             "boot_time": self.get_boot_time(),
         }
         try:
@@ -33,7 +35,7 @@ class WinAgentSvc(WindowsAgent):
         while 1:
             try:
                 payload = {
-                    "agentid": self.astor.agentid,
+                    "agent_id": self.astor.agentid,
                     "local_ip": self.get_cmd_output(["ipconfig", "/all"]),
                     "services": self.get_services(),
                     "public_ip": self.get_public_ip(),

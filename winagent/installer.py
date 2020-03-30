@@ -279,7 +279,7 @@ class Installer:
         window.Close()
         # rmm get token
         token_url = f"{rmm_url}/api/v1/token/"
-        token_payload = {"agentid": unique_id}
+        token_payload = {"agent_id": unique_id}
         token_resp = requests.post(
             token_url,
             json.dumps(token_payload),
@@ -389,7 +389,7 @@ class Installer:
     def add_to_dashboard(self, gui_queue):
         print("Adding agent to dashboard...")
         add_payload = {
-            "agentid": self.unique_id,
+            "agent_id": self.unique_id,
             "hostname": self.agent_hostname,
             "client": self.agent_client,
             "site": self.agent_site,
