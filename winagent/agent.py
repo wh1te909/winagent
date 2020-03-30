@@ -461,7 +461,7 @@ class WindowsAgent:
         return True
 
     def cleanup(self):
-        payload = {"agentid": self.astor.agentid}
+        payload = {"agent_id": self.astor.agentid}
 
         url = f"{self.astor.server}/api/v1/deleteagent/"
         requests.post(url, json.dumps(payload), headers=self.headers)

@@ -12,7 +12,7 @@ class CheckRunner(WindowsAgent):
         self.checkrunner_url = f"{self.astor.server}/checks/checkrunner/"
 
     def run(self):
-        payload = {"agentid": self.astor.agentid}
+        payload = {"agent_id": self.astor.agentid}
         while 1:
             try:
                 resp = requests.get(
