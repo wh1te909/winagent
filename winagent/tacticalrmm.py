@@ -18,7 +18,12 @@ if __name__ == "__main__":
         from checkrunner import CheckRunner
 
         agent = CheckRunner()
-        agent.run()
+        agent.run_forever()
+    elif args.mode == "runchecks":
+        from checkrunner import CheckRunner
+
+        agent = CheckRunner()
+        agent.run_once()
     elif args.mode == "winupdater":
         from winupdater import WinUpdater
 
