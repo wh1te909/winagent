@@ -477,7 +477,6 @@ class Installer:
                     self.accept_success = False
                     break
 
-        print("Waiting for salt to start...")
         sleep(20)  # wait for salt to start
 
         # make sure we sync modules before starting services
