@@ -26,15 +26,46 @@ class CheckRunner(WindowsAgent):
             return resp.json()
 
     def run_checks(self, data):
+        diskchecks = data["diskchecks"]
+        cpuloadchecks = data["cpuloadchecks"]
+        memchecks = data["memchecks"]
+        winservicechecks = data["winservicechecks"]
         pingchecks = data["pingchecks"]
         scriptchecks = data["scriptchecks"]
         tasks = []
+
+        if diskchecks:
+            checks = [i for i in diskchecks]
+            for check in checks:
+                tasks.append(self.disk_check(check))
+
+        if memchecks:
+            checks = [i for i in memchecks]
+            for check in checks:
+                tasks.append(self.mem_check(check))
+        
+        if winservicechecks:
+            checks = [i for i in winservicechecks]
+            for check in checks:
+                tasks.append(self.win_service_check(check))
+        
+        if cpuloadchecks:
+            checks = [i for i in cpuloadchecks]
+            for check in checks:
+                tasks.append(self.cpu_load_check(check))
 
         if pingchecks:
             pings = []
             for check in pingchecks:
                 pings.append(
-                    {"cmd": ["ping", f"{check['ip']}"], "id": check["id"],}
+                    {
+                        "cmd": [
+                            "ping", 
+                            f"{check['ip']}"
+                        ], 
+                        "id": check["id"],
+                        "check_type": check["check_type"],
+                    }
                 )
 
             for ping in pings:
@@ -53,25 +84,27 @@ class CheckRunner(WindowsAgent):
                     scripts.append(
                         {
                             "cmd": [
-                                "c:\\salt\\salt-call.bat",
+                                self.salt_call,
                                 "win_agent.run_python_script",
                                 script_filename,
                                 f"timeout={timeout}",
                             ],
                             "id": check["id"],
+                            "check_type": check["check_type"],
                         }
                     )
                 else:
                     scripts.append(
                         {
                             "cmd": [
-                                "c:\\salt\\salt-call.bat",
+                                self.salt_call,
                                 "cmd.script",
                                 script_path,
                                 f"shell={shell}",
                                 f"timeout={timeout}",
                             ],
                             "id": check["id"],
+                            "check_type": check["check_type"],
                         }
                     )
 

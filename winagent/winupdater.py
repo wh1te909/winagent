@@ -19,7 +19,7 @@ class WinUpdater(WindowsAgent):
     def install_update(self, kb):
         r = subprocess.run(
             [
-                "c:\\salt\\salt-call.bat",
+                self.salt_call,
                 "win_wua.get",
                 f"{kb}",
                 "download=True",

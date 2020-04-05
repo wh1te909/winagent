@@ -16,7 +16,7 @@ import datetime as dt
 from collections import defaultdict
 from peewee import *
 import logging
-from time import sleep
+from time import sleep, perf_counter
 import shutil
 from ctypes.wintypes import BYTE, WORD, DWORD, WCHAR
 
@@ -182,6 +182,7 @@ class WindowsAgent:
         self.platform = platform.system().lower()
         self.astor = self.get_db()
         self.programdir = "C:\\Program Files\\TacticalAgent"
+        self.salt_call = "C:\\salt\\salt-call.bat"
         self.headers = {
             "content-type": "application/json",
             "Authorization": f"Token {self.astor.token}",
@@ -195,54 +196,45 @@ class WindowsAgent:
         self.salt_minion_exe = (
             "https://github.com/wh1te909/winagent/raw/master/bin/salt-minion-setup.exe"
         )
+        self.update_check_url = f"{self.astor.server}/checks/updatecheck/"
 
     async def script_check(self, cmd):
-        output = (
-            "Script started "
-            + dt.datetime.now().strftime("%c")
-            + "\n"
-            + "-" * 40
-            + "\n"
-        )
-        retcode = 99
+        start = perf_counter()
         proc = await asyncio.create_subprocess_exec(
             *cmd["cmd"], stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
         )
-
         proc_stdout, proc_stderr = await proc.communicate()
+        stop = perf_counter()
 
         if proc_stdout:
             resp = json.loads(proc_stdout.decode("utf-8", errors="ignore"))
             retcode = resp["local"]["retcode"]
-            out = resp["local"]["stdout"]
-            err = resp["local"]["stderr"]
+            stdout = resp["local"]["stdout"]
+            stderr = resp["local"]["stderr"]
 
-            if out:
-                output += "STDOUT:\n" + resp["local"]["stdout"]
-
-            if err:
-                output += "\nSTDERR:\n" + resp["local"]["stderr"]
-
-        if proc_stderr:
-            output += proc_stderr.decode("utf-8", errors="ignore")
-
-        output += (
-            "\n"
-            + "-" * 40
-            + "\nScript finished at "
-            + dt.datetime.now().strftime("%c")
-            + f"\nreturn code: {retcode}"
-        )
+        elif proc_stderr:
+            retcode = 99
+            stdout = ""
+            stderr = proc_stderr.decode("utf-8", errors="ignore")
 
         if retcode != 0:
             status = "failing"
         else:
             status = "passing"
 
-        url = f"{self.astor.server}/checks/updatescriptcheck/"
-        payload = {"output": output, "status": status, "id": cmd["id"]}
-        resp = requests.patch(url, json.dumps(payload), headers=self.headers)
+        payload = {
+            "stdout": stdout,
+            "stderr": stderr,
+            "status": status,
+            "retcode": retcode,
+            "id": cmd["id"],
+            "check_type": cmd["check_type"],
+            "execution_time": "{:.4f}".format(round(stop - start)),
+        }
 
+        resp = requests.patch(
+            self.update_check_url, json.dumps(payload), headers=self.headers
+        )
         return status
 
     async def ping_check(self, cmd):
@@ -253,7 +245,6 @@ class WindowsAgent:
         stdout, stderr = await proc.communicate()
 
         success = ["Reply", "bytes", "time", "TTL"]
-        status = ""
 
         if stdout:
             output = stdout.decode("utf-8", errors="ignore")
@@ -262,15 +253,113 @@ class WindowsAgent:
             else:
                 status = "failing"
 
-        if stderr:
+        elif stderr:
             status = "failing"
-            output = "error running ping check"
+            output = stderr.decode("utf-8", errors="ignore")
 
-        url = f"{self.astor.server}/checks/updatepingcheck/"
-        payload = {"output": output, "id": cmd["id"], "status": status}
-        resp = requests.patch(url, json.dumps(payload), headers=self.headers)
-
+        payload = {
+            "id": cmd["id"], 
+            "status": status,
+            "more_info": output,
+            "check_type": cmd["check_type"],
+        }
+        resp = requests.patch(
+            self.update_check_url, json.dumps(payload), headers=self.headers
+        )
         return status
+
+    async def disk_check(self, data):
+        disk = psutil.disk_usage(data["disk"])
+        percent_used = round(disk.percent)
+        total = bytes2human(disk.total)
+        free = bytes2human(disk.free)
+
+        if (100 - percent_used) < data["threshold"]:
+            status = "failing"
+        else:
+            status = "passing"
+
+        more_info = f"Total: {total}B, Free: {free}B"
+
+        payload = {
+            "id": data["id"],
+            "check_type": data["check_type"],
+            "status": status,
+            "more_info": more_info,
+        }
+        resp = requests.patch(
+            self.update_check_url, json.dumps(payload), headers=self.headers
+        )
+        return status
+
+    async def cpu_load_check(self, data):
+        cpu_load = round(self.get_cpu_load())
+
+        payload = {
+            "id": data["id"],
+            "check_type": data["check_type"],
+            "cpu_load": cpu_load,
+        }
+        resp = requests.patch(
+            self.update_check_url, json.dumps(payload), headers=self.headers
+        )
+        return "ok"
+
+    async def mem_check(self, data):
+        used_ram = self.get_used_ram()
+
+        payload = {
+            "id": data["id"],
+            "check_type": data["check_type"],
+            "used_ram": used_ram,
+        }
+        resp = requests.patch(
+            self.update_check_url, json.dumps(payload), headers=self.headers
+        )
+        return "ok"
+
+    async def win_service_check(self, data):
+        services = self.get_services()
+        service = list(filter(lambda x: x["name"] == data["svc_name"], services))[0]
+
+        service_status = service["status"]
+
+        if service_status == "running":
+            status = "passing"
+
+        elif service_status == "start_pending" and data["pass_if_start_pending"]:
+            status = "passing"
+
+        else:
+            status = "failing"
+
+            if data["restart_if_stopped"]:
+                ret = self.salt_call_ret_bool(
+                    cmd="service.restart", args=data["svc_name"], timeout=60,
+                )
+                sleep(5)
+                reloaded = self.get_services()
+                stat = list(filter(lambda x: x["name"] == data["svc_name"], reloaded))[0]["status"]
+
+                if stat == "running":
+                    status = "passing"
+                elif stat == "start_pending" and data["pass_if_start_pending"]:
+                    status = "passing"
+                else:
+                    status = "failing"
+
+                service_status = stat
+
+        payload = {
+            "id": data["id"],
+            "check_type": data["check_type"],
+            "status": status,
+            "more_info": f"Status {service_status.upper()}",
+        }
+        resp = requests.patch(
+            self.update_check_url, json.dumps(payload), headers=self.headers
+        )
+        return "ok"
 
     def get_db(self):
         with db:
@@ -401,18 +490,24 @@ class WindowsAgent:
         else:
             return "n/a"
 
-    def salt_call_ret_bool(self, cmd):
+    def salt_call_ret_bool(self, cmd, args=None, timeout=30):
         try:
-            r = subprocess.run(
-                ["c:\\salt\\salt-call.bat", cmd, "--local",], capture_output=True,
-            )
+            if args:
+                command = [self.salt_call, cmd, args, "--local", f"--timeout={timeout}"]
+            else:
+                command = [self.salt_call, cmd, "--local", f"--timeout={timeout}"]
+
+            r = subprocess.run(command, capture_output=True)
         except Exception:
             return False
         else:
-            ret = json.loads(r.stdout.decode("utf-8", errors="ignore"))
-            if ret["local"]:
-                return True
-            else:
+            try:
+                ret = json.loads(r.stdout.decode("utf-8", errors="ignore"))
+                if ret["local"]:
+                    return True
+                else:
+                    return False
+            except:
                 return False
 
     def update_salt(self):

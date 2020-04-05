@@ -16,20 +16,20 @@ class WinAgentSvc(WindowsAgent):
         self.logger.info("Agent started.")
         # wait a bit before starting otherwise boot_time will be inaccurate
         sleep(randrange(start=10, stop=20))
-        info = {
-            "agent_id": self.astor.agentid,
-            "hostname": self.hostname,
-            "operating_system": self.get_os(),
-            "total_ram": self.get_total_ram(),
-            "plat": self.platform,
-            "plat_release": self.get_platform_release(),
-            "version": self.astor.version,
-            "antivirus": self.get_av(),
-            "boot_time": self.get_boot_time(),
-        }
         try:
+            info = {
+                "agent_id": self.astor.agentid,
+                "hostname": self.hostname,
+                "operating_system": self.get_os(),
+                "total_ram": self.get_total_ram(),
+                "plat": self.platform,
+                "plat_release": self.get_platform_release(),
+                "version": self.astor.version,
+                "antivirus": self.get_av(),
+                "boot_time": self.get_boot_time(),
+            }
             requests.patch(self.update_url, json.dumps(info), headers=self.headers)
-        except Exception:
+        except:
             pass
 
         while 1:
@@ -39,7 +39,6 @@ class WinAgentSvc(WindowsAgent):
                     "local_ip": self.get_cmd_output(["ipconfig", "/all"]),
                     "services": self.get_services(),
                     "public_ip": self.get_public_ip(),
-                    "cpu_load": self.get_cpu_load(),
                     "used_ram": self.get_used_ram(),
                     "disks": self.get_disks(),
                     "logged_in_username": self.get_logged_on_user(),
