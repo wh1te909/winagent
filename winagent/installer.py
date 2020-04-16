@@ -564,29 +564,6 @@ class Installer:
         )
         subprocess.run([self.nssm, "start", "checkrunner"])
 
-        # winupdater
-        subprocess.run(
-            [self.nssm, "install", "winupdater", self.tacticalrmm, "-m", "winupdater",]
-        )
-        subprocess.run(
-            [
-                self.nssm,
-                "set",
-                "winupdater",
-                "DisplayName",
-                r"Tactical Agent Windows Update",
-            ]
-        )
-        subprocess.run(
-            [
-                self.nssm,
-                "set",
-                "winupdater",
-                "Description",
-                r"Tactical Agent Background Windows Update Service",
-            ]
-        )
-        subprocess.run([self.nssm, "start", "winupdater"])
         return True
 
     def finish(self):
@@ -632,13 +609,11 @@ class AgentGUI:
         agent_status = psutil.win_service_get("tacticalagent").status()
         salt_status = psutil.win_service_get("salt-minion").status()
         check_status = psutil.win_service_get("checkrunner").status()
-        updater_status = psutil.win_service_get("winupdater").status()
 
         status_layout = [
             [sg.Text("Agent status: "), sg.Text(agent_status)],
             [sg.Text("Salt minion status: "), sg.Text(salt_status)],
             [sg.Text("Checkrunner status: "), sg.Text(check_status)],
-            [sg.Text("Winupdater status: "), sg.Text(updater_status)],
         ]
 
         window_status = sg.Window(

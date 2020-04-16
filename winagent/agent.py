@@ -196,7 +196,7 @@ class WindowsAgent:
         self.salt_minion_exe = (
             "https://github.com/wh1te909/winagent/raw/master/bin/salt-minion-setup.exe"
         )
-        self.update_check_url = f"{self.astor.server}/checks/updatecheck/"
+        self.check_results_url = f"{self.astor.server}/checks/checkresults/"
 
     async def script_check(self, cmd):
         start = perf_counter()
@@ -233,8 +233,15 @@ class WindowsAgent:
         }
 
         resp = requests.patch(
-            self.update_check_url, json.dumps(payload), headers=self.headers
+            self.check_results_url, json.dumps(payload), headers=self.headers
         )
+
+        if status == "failing" and cmd["task_on_failure"]:
+            from taskrunner import TaskRunner
+
+            task = TaskRunner(task_pk=cmd["task_on_failure"])
+            task.run()
+
         return status
 
     async def ping_check(self, cmd):
@@ -258,14 +265,22 @@ class WindowsAgent:
             output = stderr.decode("utf-8", errors="ignore")
 
         payload = {
-            "id": cmd["id"], 
+            "id": cmd["id"],
             "status": status,
             "more_info": output,
             "check_type": cmd["check_type"],
         }
+
         resp = requests.patch(
-            self.update_check_url, json.dumps(payload), headers=self.headers
+            self.check_results_url, json.dumps(payload), headers=self.headers
         )
+
+        if status == "failing" and cmd["task_on_failure"]:
+            from taskrunner import TaskRunner
+
+            task = TaskRunner(task_pk=cmd["task_on_failure"])
+            task.run()
+
         return status
 
     async def disk_check(self, data):
@@ -288,8 +303,15 @@ class WindowsAgent:
             "more_info": more_info,
         }
         resp = requests.patch(
-            self.update_check_url, json.dumps(payload), headers=self.headers
+            self.check_results_url, json.dumps(payload), headers=self.headers
         )
+
+        if status == "failing" and data["task_on_failure"]:
+            from taskrunner import TaskRunner
+
+            task = TaskRunner(task_pk=data["task_on_failure"])
+            task.run()
+
         return status
 
     async def cpu_load_check(self, data):
@@ -301,7 +323,7 @@ class WindowsAgent:
             "cpu_load": cpu_load,
         }
         resp = requests.patch(
-            self.update_check_url, json.dumps(payload), headers=self.headers
+            self.check_results_url, json.dumps(payload), headers=self.headers
         )
         return "ok"
 
@@ -314,7 +336,7 @@ class WindowsAgent:
             "used_ram": used_ram,
         }
         resp = requests.patch(
-            self.update_check_url, json.dumps(payload), headers=self.headers
+            self.check_results_url, json.dumps(payload), headers=self.headers
         )
         return "ok"
 
@@ -337,9 +359,11 @@ class WindowsAgent:
                 ret = self.salt_call_ret_bool(
                     cmd="service.restart", args=data["svc_name"], timeout=60,
                 )
-                sleep(5)
+                sleep(15)
                 reloaded = self.get_services()
-                stat = list(filter(lambda x: x["name"] == data["svc_name"], reloaded))[0]["status"]
+                stat = list(filter(lambda x: x["name"] == data["svc_name"], reloaded))[
+                    0
+                ]["status"]
 
                 if stat == "running":
                     status = "passing"
@@ -357,8 +381,15 @@ class WindowsAgent:
             "more_info": f"Status {service_status.upper()}",
         }
         resp = requests.patch(
-            self.update_check_url, json.dumps(payload), headers=self.headers
+            self.check_results_url, json.dumps(payload), headers=self.headers
         )
+
+        if status == "failing" and data["task_on_failure"]:
+            from taskrunner import TaskRunner
+
+            task = TaskRunner(task_pk=data["task_on_failure"])
+            task.run()
+
         return "ok"
 
     def get_db(self):
@@ -517,10 +548,7 @@ class WindowsAgent:
         if os.path.exists(minion_file):
             os.remove(minion_file)
 
-        services = (
-            "checkrunner",
-            "winupdater",
-        )
+        services = ("checkrunner",)
         for svc in services:
             subprocess.run(["sc", "stop", svc])
 

@@ -32,6 +32,8 @@ class WinAgentSvc(WindowsAgent):
         except:
             pass
 
+        sleep(5)
+
         while 1:
             try:
                 payload = {
@@ -47,7 +49,7 @@ class WinAgentSvc(WindowsAgent):
                 requests.patch(
                     self.hello_url, json.dumps(payload), headers=self.headers
                 )
-            except Exception:
+            except:
                 pass
             finally:
                 sleep(randrange(start=15, stop=30))

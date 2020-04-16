@@ -6,6 +6,7 @@ from time import sleep
 
 parser = argparse.ArgumentParser(description="Tactical RMM Windows Agent")
 parser.add_argument("-m", action="store", dest="mode", type=str)
+parser.add_argument("-p", action="store", dest="taskpk", type=int)
 args = parser.parse_args()
 
 if __name__ == "__main__":
@@ -28,7 +29,20 @@ if __name__ == "__main__":
         from winupdater import WinUpdater
 
         agent = WinUpdater()
+        agent.install_all()
+
+    elif args.mode == "patchscan":
+        from winupdater import WinUpdater
+
+        agent = WinUpdater()
+        agent.trigger_patch_scan()
+
+    elif args.mode == "taskrunner":
+        from taskrunner import TaskRunner
+
+        agent = TaskRunner(task_pk=args.taskpk)
         agent.run()
+
     elif args.mode == "updatesalt":
         from agent import WindowsAgent
 
