@@ -1,9 +1,6 @@
 import subprocess
 import json
 import requests
-import os
-from time import sleep
-import datetime as dt
 
 from agent import WindowsAgent
 
@@ -31,70 +28,65 @@ class WinUpdater(WindowsAgent):
 
         return r.stdout.decode("utf-8", errors="ignore")
 
-    def run(self):
-        while 1:
-            try:
-                resp = requests.get(
-                    self.updater_url,
-                    data=json.dumps(self.check_payload),
-                    headers=self.headers,
-                    timeout=15,
-                )
-            except Exception:
-                pass
+    def trigger_patch_scan(self):
+        try:
+            payload = {
+                "agent_id": self.astor.agentid,
+                "reboot": self.salt_call_ret_bool("win_wua.get_needs_reboot"),
+            }
+            r = requests.patch(
+                self.scan_url,
+                data=json.dumps(payload),
+                headers=self.headers,
+                timeout=60,
+            )
+        except:
+            return False
+
+        return "ok"
+
+    def install_all(self):
+        try:
+            resp = requests.get(
+                self.updater_url,
+                data=json.dumps(self.check_payload),
+                headers=self.headers,
+                timeout=30,
+            )
+        except Exception:
+            return False
+        else:
+            if resp.json() == "nopatches":
+                return False
             else:
-                if resp.json() == "nopatches":
-                    pass
-                else:
-                    try:
-                        policy = resp.json()[0]["patch_policy"]
-                        weekday = dt.datetime.today().weekday()  # Monday 0, Sunday 6
-                        hour = dt.datetime.now().hour
+                try:
+                    for patch in resp.json():
+                        kb = patch["kb"]
+                        install = self.install_update(kb)
+                        self.logger.info(install)
+                        res_payload = {"agent_id": self.astor.agentid, "kb": kb}
+                        status = json.loads(install)
 
                         if (
-                            weekday in policy["run_time_days"]
-                            and hour == policy["run_time_hour"]
+                            status["local"]["Install"]["Updates"]
+                            == "Nothing to install"
                         ):
+                            res_payload.update({"results": "alreadyinstalled"})
+                        else:
+                            if status["local"]["Install"]["Success"]:
+                                res_payload.update({"results": "success"})
+                            else:
+                                res_payload.update({"results": "failed"})
 
-                            for patch in resp.json():
-                                kb = patch["kb"]
-                                install = self.install_update(kb)
-                                self.logger.info(install)
-                                res_payload = {"agent_id": self.astor.agentid, "kb": kb}
-                                status = json.loads(install)
+                        requests.patch(
+                            self.results_url,
+                            json.dumps(res_payload),
+                            headers=self.headers,
+                            timeout=30,
+                        )
 
-                                if (
-                                    status["local"]["Install"]["Updates"]
-                                    == "Nothing to install"
-                                ):
-                                    res_payload.update({"results": "alreadyinstalled"})
-                                else:
-                                    if status["local"]["Install"]["Success"]:
-                                        res_payload.update({"results": "success"})
-                                    else:
-                                        res_payload.update({"results": "failed"})
+                    # trigger a patch scan once all updates finish installing, and check if reboot needed
+                    self.trigger_patch_scan()
 
-                                requests.patch(
-                                    self.results_url,
-                                    json.dumps(res_payload),
-                                    headers=self.headers,
-                                    timeout=15,
-                                )
-
-                            # trigger a patch scan once all updates finish installing, and check if reboot needed
-                            done_payload = {
-                                "agent_id": self.astor.agentid,
-                                "reboot": self.salt_call_ret_bool(
-                                    "win_wua.get_needs_reboot"
-                                ),
-                            }
-                            requests.patch(
-                                self.scan_url,
-                                data=json.dumps(done_payload),
-                                headers=self.headers,
-                                timeout=15,
-                            )
-
-                    except Exception as e:
-                        self.logger.error(e)
-            sleep(180)
+                except Exception as e:
+                    self.logger.error(e)

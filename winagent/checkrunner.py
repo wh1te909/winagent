@@ -43,12 +43,12 @@ class CheckRunner(WindowsAgent):
             checks = [i for i in memchecks]
             for check in checks:
                 tasks.append(self.mem_check(check))
-        
+
         if winservicechecks:
             checks = [i for i in winservicechecks]
             for check in checks:
                 tasks.append(self.win_service_check(check))
-        
+
         if cpuloadchecks:
             checks = [i for i in cpuloadchecks]
             for check in checks:
@@ -59,12 +59,10 @@ class CheckRunner(WindowsAgent):
             for check in pingchecks:
                 pings.append(
                     {
-                        "cmd": [
-                            "ping", 
-                            f"{check['ip']}"
-                        ], 
+                        "cmd": ["ping", f"{check['ip']}"],
                         "id": check["id"],
                         "check_type": check["check_type"],
+                        "task_on_failure": check["task_on_failure"],
                     }
                 )
 
@@ -91,6 +89,7 @@ class CheckRunner(WindowsAgent):
                             ],
                             "id": check["id"],
                             "check_type": check["check_type"],
+                            "task_on_failure": check["task_on_failure"],
                         }
                     )
                 else:
@@ -105,6 +104,7 @@ class CheckRunner(WindowsAgent):
                             ],
                             "id": check["id"],
                             "check_type": check["check_type"],
+                            "task_on_failure": check["task_on_failure"],
                         }
                     )
 
