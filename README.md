@@ -14,6 +14,7 @@ git clone https://github.com/wh1te909/winagent.git .
 python -m venv env
 .\env\Scripts\Activate.ps1
 python -m pip install --upgrade pip
+pip install --upgrade setuptools wheel
 pip install --no-cache-dir -r requirements.txt
 cd winagent
 pyinstaller --clean --noconsole --uac-admin --icon=..\bin\onit.ico .\tacticalrmm.py
