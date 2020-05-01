@@ -2,8 +2,9 @@ import json
 import requests
 from time import sleep
 from random import randrange
+import concurrent.futures
 
-from agent import WindowsAgent, run_asyncio_commands
+from agent import WindowsAgent
 
 
 class CheckRunner(WindowsAgent):
@@ -34,85 +35,37 @@ class CheckRunner(WindowsAgent):
         scriptchecks = data["scriptchecks"]
         tasks = []
 
-        if diskchecks:
-            checks = [i for i in diskchecks]
-            for check in checks:
-                tasks.append(self.disk_check(check))
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
 
-        if memchecks:
-            checks = [i for i in memchecks]
-            for check in checks:
-                tasks.append(self.mem_check(check))
+            if diskchecks:
+                checks = [i for i in diskchecks]
+                for check in checks:
+                    tasks.append(executor.submit(self.disk_check, check))
 
-        if winservicechecks:
-            checks = [i for i in winservicechecks]
-            for check in checks:
-                tasks.append(self.win_service_check(check))
+            if memchecks:
+                checks = [i for i in memchecks]
+                for check in checks:
+                    tasks.append(executor.submit(self.mem_check, check))
 
-        if cpuloadchecks:
-            checks = [i for i in cpuloadchecks]
-            for check in checks:
-                tasks.append(self.cpu_load_check(check))
+            if winservicechecks:
+                checks = [i for i in winservicechecks]
+                for check in checks:
+                    tasks.append(executor.submit(self.win_service_check, check))
 
-        if pingchecks:
-            pings = []
-            for check in pingchecks:
-                pings.append(
-                    {
-                        "cmd": ["ping", f"{check['ip']}"],
-                        "id": check["id"],
-                        "check_type": check["check_type"],
-                        "task_on_failure": check["task_on_failure"],
-                    }
-                )
+            if cpuloadchecks:
+                checks = [i for i in cpuloadchecks]
+                for check in checks:
+                    tasks.append(executor.submit(self.cpu_load_check, check))
 
-            for ping in pings:
-                tasks.append(self.ping_check(ping))
+            if pingchecks:
+                checks = [i for i in pingchecks]
+                for check in checks:
+                    tasks.append(executor.submit(self.ping_check, check))
 
-        if scriptchecks:
-            scripts = []
-            for check in scriptchecks:
-
-                script_path = check["script"]["filepath"]
-                shell = check["script"]["shell"]
-                timeout = check["timeout"]
-                script_filename = check["script"]["filename"]
-
-                if shell == "python":
-                    scripts.append(
-                        {
-                            "cmd": [
-                                self.salt_call,
-                                "win_agent.run_python_script",
-                                script_filename,
-                                f"timeout={timeout}",
-                            ],
-                            "id": check["id"],
-                            "check_type": check["check_type"],
-                            "task_on_failure": check["task_on_failure"],
-                        }
-                    )
-                else:
-                    scripts.append(
-                        {
-                            "cmd": [
-                                self.salt_call,
-                                "cmd.script",
-                                script_path,
-                                f"shell={shell}",
-                                f"timeout={timeout}",
-                            ],
-                            "id": check["id"],
-                            "check_type": check["check_type"],
-                            "task_on_failure": check["task_on_failure"],
-                        }
-                    )
-
-            for script in scripts:
-                tasks.append(self.script_check(script))
-
-        if tasks:
-            results = run_asyncio_commands(tasks, max_concurrent_tasks=20)
+            if scriptchecks:
+                checks = [i for i in scriptchecks]
+                for check in checks:
+                    tasks.append(executor.submit(self.script_check, check))
 
     def run_once(self):
         ret = self.get_checks()

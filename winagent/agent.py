@@ -11,69 +11,34 @@ import psutil
 import os
 import math
 import validators
-import asyncio
 import datetime as dt
 from collections import defaultdict
-from peewee import *
+import peewee
 import logging
 from time import sleep, perf_counter
 import shutil
 from ctypes.wintypes import BYTE, WORD, DWORD, WCHAR
 
 kernel32 = ctypes.WinDLL(str("kernel32"), use_last_error=True)
-db = SqliteDatabase("C:\\Program Files\\TacticalAgent\\agentdb.db")
+db = peewee.SqliteDatabase("C:\\Program Files\\TacticalAgent\\agentdb.db")
 
 
-class AgentStorage(Model):
-    server = CharField()
-    agentid = CharField()
-    client = CharField()
-    site = CharField()
-    agent_type = CharField()
-    description = CharField()
-    mesh_node_id = CharField()
-    token = CharField()
-    version = CharField()
-    agentpk = IntegerField()
-    salt_master = CharField()
-    salt_id = CharField()
+class AgentStorage(peewee.Model):
+    server = peewee.CharField()
+    agentid = peewee.CharField()
+    client = peewee.CharField()
+    site = peewee.CharField()
+    agent_type = peewee.CharField()
+    description = peewee.CharField()
+    mesh_node_id = peewee.CharField()
+    token = peewee.CharField()
+    version = peewee.CharField()
+    agentpk = peewee.IntegerField()
+    salt_master = peewee.CharField()
+    salt_id = peewee.CharField()
 
     class Meta:
         database = db
-
-
-def make_chunks(l, n):
-    for i in range(0, len(l), n):
-        yield l[i : i + n]
-
-
-# source: https://fredrikaverpil.github.io/2017/06/20/async-and-await-with-subprocesses/
-def run_asyncio_commands(tasks, max_concurrent_tasks=0):
-
-    all_results = []
-
-    if max_concurrent_tasks == 0:
-        chunks = [tasks]
-        num_chunks = len(chunks)
-    else:
-        chunks = make_chunks(l=tasks, n=max_concurrent_tasks)
-        num_chunks = len(list(make_chunks(l=tasks, n=max_concurrent_tasks)))
-
-    if asyncio.get_event_loop().is_closed():
-        asyncio.set_event_loop(asyncio.new_event_loop())
-
-    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
-    loop = asyncio.get_event_loop()
-
-    chunk = 1
-    for tasks_in_chunk in chunks:
-        commands = asyncio.gather(*tasks_in_chunk)  # Unpack list using *
-        results = loop.run_until_complete(commands)
-        all_results += results
-        chunk += 1
-
-    loop.close()
-    return all_results
 
 
 def bytes2human(n):
@@ -198,24 +163,43 @@ class WindowsAgent:
         )
         self.check_results_url = f"{self.astor.server}/checks/checkresults/"
 
-    async def script_check(self, cmd):
+    def script_check(self, data):
+
+        script_path = data["script"]["filepath"]
+        shell = data["script"]["shell"]
+        timeout = data["timeout"]
+        script_filename = data["script"]["filename"]
+
+        if shell == "python":
+            cmd = [
+                self.salt_call,
+                "win_agent.run_python_script",
+                script_filename,
+                f"timeout={timeout}",
+            ]
+        else:
+            cmd = [
+                self.salt_call,
+                "cmd.script",
+                script_path,
+                f"shell={shell}",
+                f"timeout={timeout}",
+            ]
+
         start = perf_counter()
-        proc = await asyncio.create_subprocess_exec(
-            *cmd["cmd"], stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
-        )
-        proc_stdout, proc_stderr = await proc.communicate()
+        r = subprocess.run(cmd, capture_output=True)
         stop = perf_counter()
 
-        if proc_stdout:
-            resp = json.loads(proc_stdout.decode("utf-8", errors="ignore"))
+        if r.stdout:
+            resp = json.loads(r.stdout.decode("utf-8", errors="ignore"))
             retcode = resp["local"]["retcode"]
             stdout = resp["local"]["stdout"]
             stderr = resp["local"]["stderr"]
 
-        elif proc_stderr:
+        elif r.stderr:
             retcode = 99
             stdout = ""
-            stderr = proc_stderr.decode("utf-8", errors="ignore")
+            stderr = r.stderr.decode("utf-8", errors="ignore")
 
         if retcode != 0:
             status = "failing"
@@ -227,8 +211,8 @@ class WindowsAgent:
             "stderr": stderr,
             "status": status,
             "retcode": retcode,
-            "id": cmd["id"],
-            "check_type": cmd["check_type"],
+            "id": data["id"],
+            "check_type": data["check_type"],
             "execution_time": "{:.4f}".format(round(stop - start)),
         }
 
@@ -236,54 +220,51 @@ class WindowsAgent:
             self.check_results_url, json.dumps(payload), headers=self.headers
         )
 
-        if status == "failing" and cmd["task_on_failure"]:
+        if status == "failing" and data["task_on_failure"]:
             from taskrunner import TaskRunner
 
-            task = TaskRunner(task_pk=cmd["task_on_failure"])
+            task = TaskRunner(task_pk=data["task_on_failure"])
             task.run()
 
         return status
 
-    async def ping_check(self, cmd):
+    def ping_check(self, data):
 
-        proc = await asyncio.create_subprocess_exec(
-            *cmd["cmd"], stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
-        )
-        stdout, stderr = await proc.communicate()
+        r = subprocess.run(["ping", data["ip"]], capture_output=True)
 
         success = ["Reply", "bytes", "time", "TTL"]
 
-        if stdout:
-            output = stdout.decode("utf-8", errors="ignore")
+        if r.stdout:
+            output = r.stdout.decode("utf-8", errors="ignore")
             if all(x in output for x in success):
                 status = "passing"
             else:
                 status = "failing"
 
-        elif stderr:
+        elif r.stderr:
             status = "failing"
-            output = stderr.decode("utf-8", errors="ignore")
+            output = r.stderr.decode("utf-8", errors="ignore")
 
         payload = {
-            "id": cmd["id"],
+            "id": data["id"],
             "status": status,
             "more_info": output,
-            "check_type": cmd["check_type"],
+            "check_type": data["check_type"],
         }
 
         resp = requests.patch(
             self.check_results_url, json.dumps(payload), headers=self.headers
         )
 
-        if status == "failing" and cmd["task_on_failure"]:
+        if status == "failing" and data["task_on_failure"]:
             from taskrunner import TaskRunner
 
-            task = TaskRunner(task_pk=cmd["task_on_failure"])
+            task = TaskRunner(task_pk=data["task_on_failure"])
             task.run()
 
         return status
 
-    async def disk_check(self, data):
+    def disk_check(self, data):
         disk = psutil.disk_usage(data["disk"])
         percent_used = round(disk.percent)
         total = bytes2human(disk.total)
@@ -314,7 +295,7 @@ class WindowsAgent:
 
         return status
 
-    async def cpu_load_check(self, data):
+    def cpu_load_check(self, data):
         cpu_load = round(self.get_cpu_load())
 
         payload = {
@@ -327,7 +308,7 @@ class WindowsAgent:
         )
         return "ok"
 
-    async def mem_check(self, data):
+    def mem_check(self, data):
         used_ram = self.get_used_ram()
 
         payload = {
@@ -340,7 +321,7 @@ class WindowsAgent:
         )
         return "ok"
 
-    async def win_service_check(self, data):
+    def win_service_check(self, data):
         services = self.get_services()
         service = list(filter(lambda x: x["name"] == data["svc_name"], services))[0]
 

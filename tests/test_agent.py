@@ -2,7 +2,7 @@ import sys
 import os
 import validators
 import pytest
-import mock
+import unittest.mock as mock
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
