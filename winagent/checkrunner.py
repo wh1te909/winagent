@@ -24,60 +24,72 @@ class CheckRunner(WindowsAgent):
         except:
             return False
         else:
-            return resp.json()
+            try:
+                return resp.json()
+            except:
+                return False
 
     def run_checks(self, data):
+
         diskchecks = data["diskchecks"]
         cpuloadchecks = data["cpuloadchecks"]
         memchecks = data["memchecks"]
         winservicechecks = data["winservicechecks"]
         pingchecks = data["pingchecks"]
         scriptchecks = data["scriptchecks"]
-        tasks = []
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        with concurrent.futures.ProcessPoolExecutor() as executor:
 
             if diskchecks:
-                checks = [i for i in diskchecks]
+                checks = [_ for _ in diskchecks]
                 for check in checks:
-                    tasks.append(executor.submit(self.disk_check, check))
+                    executor.submit(self.disk_check, check)
+                sleep(0.1)
 
             if memchecks:
-                checks = [i for i in memchecks]
+                checks = [_ for _ in memchecks]
                 for check in checks:
-                    tasks.append(executor.submit(self.mem_check, check))
+                    executor.submit(self.mem_check, check)
+                sleep(0.1)
 
             if winservicechecks:
-                checks = [i for i in winservicechecks]
+                checks = [_ for _ in winservicechecks]
                 for check in checks:
-                    tasks.append(executor.submit(self.win_service_check, check))
+                    executor.submit(self.win_service_check, check)
+                sleep(0.1)
 
             if cpuloadchecks:
-                checks = [i for i in cpuloadchecks]
+                checks = [_ for _ in cpuloadchecks]
                 for check in checks:
-                    tasks.append(executor.submit(self.cpu_load_check, check))
+                    executor.submit(self.cpu_load_check, check)
+                sleep(0.1)
 
             if pingchecks:
-                checks = [i for i in pingchecks]
+                checks = [_ for _ in pingchecks]
                 for check in checks:
-                    tasks.append(executor.submit(self.ping_check, check))
+                    executor.submit(self.ping_check, check)
+                sleep(0.1)
 
             if scriptchecks:
-                checks = [i for i in scriptchecks]
+                checks = [_ for _ in scriptchecks]
                 for check in checks:
-                    tasks.append(executor.submit(self.script_check, check))
+                    executor.submit(self.script_check, check)
+                    sleep(0.3)
 
     def run_once(self):
+        self.logger.info("Running checks manually")
         ret = self.get_checks()
         if not ret:
             return False
         else:
             try:
                 self.run_checks(ret)
-            except:
+            except Exception as e:
+                self.logger.error(f"Error running checks: {e}")
                 return False
 
     def run_forever(self):
+        self.logger.info("Checkrunner service started")
         while 1:
             ret = self.get_checks()
             if not ret:
@@ -85,8 +97,8 @@ class CheckRunner(WindowsAgent):
             else:
                 try:
                     self.run_checks(ret)
-                except:
-                    pass
+                except Exception as e:
+                    self.logger.error(f"Error running checks: {e}")
                 finally:
                     try:
                         sleep(int(ret["check_interval"]))
