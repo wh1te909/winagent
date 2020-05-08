@@ -21,7 +21,7 @@ class TaskRunner(WindowsAgent):
 
     def get_task(self):
         try:
-            resp = requests.get(self.task_url, headers=self.headers, timeout=60,)
+            resp = requests.get(self.task_url, headers=self.headers, timeout=15,)
         except:
             return False
         else:
@@ -76,7 +76,7 @@ class TaskRunner(WindowsAgent):
             }
 
             resp = requests.patch(
-                self.task_url, json.dumps(payload), headers=self.headers
+                self.task_url, json.dumps(payload), headers=self.headers, timeout=15,
             )
 
         except Exception as e:

@@ -2,9 +2,31 @@ import json
 import requests
 from time import sleep
 from random import randrange
-import concurrent.futures
+from concurrent.futures import ThreadPoolExecutor
+from threading import BoundedSemaphore
 
 from agent import WindowsAgent
+
+
+# https://www.bettercodebytes.com/theadpoolexecutor-with-a-bounded-queue-in-python/
+class BoundedExecutor:
+    def __init__(self, bound, max_workers):
+        self.executor = ThreadPoolExecutor(max_workers=max_workers)
+        self.semaphore = BoundedSemaphore(bound + max_workers)
+
+    def submit(self, fn, *args, **kwargs):
+        self.semaphore.acquire()
+        try:
+            future = self.executor.submit(fn, *args, **kwargs)
+        except:
+            self.semaphore.release()
+            raise
+        else:
+            future.add_done_callback(lambda x: self.semaphore.release())
+            return future
+
+    def shutdown(self, wait=True):
+        self.executor.shutdown(wait)
 
 
 class CheckRunner(WindowsAgent):
@@ -37,44 +59,51 @@ class CheckRunner(WindowsAgent):
         winservicechecks = data["winservicechecks"]
         pingchecks = data["pingchecks"]
         scriptchecks = data["scriptchecks"]
+        tasks = []
 
-        with concurrent.futures.ProcessPoolExecutor() as executor:
+        if diskchecks:
+            checks = [_ for _ in diskchecks]
+            for check in checks:
+                tasks.append((self.disk_check, check))
 
-            if diskchecks:
-                checks = [_ for _ in diskchecks]
-                for check in checks:
-                    executor.submit(self.disk_check, check)
-                sleep(0.1)
+        if memchecks:
+            checks = [_ for _ in memchecks]
+            for check in checks:
+                tasks.append((self.mem_check, check))
 
-            if memchecks:
-                checks = [_ for _ in memchecks]
-                for check in checks:
-                    executor.submit(self.mem_check, check)
-                sleep(0.1)
+        if winservicechecks:
+            checks = [_ for _ in winservicechecks]
+            for check in checks:
+                tasks.append((self.win_service_check, check))
 
-            if winservicechecks:
-                checks = [_ for _ in winservicechecks]
-                for check in checks:
-                    executor.submit(self.win_service_check, check)
-                sleep(0.1)
+        if cpuloadchecks:
+            checks = [_ for _ in cpuloadchecks]
+            for check in checks:
+                tasks.append((self.cpu_load_check, check))
 
-            if cpuloadchecks:
-                checks = [_ for _ in cpuloadchecks]
-                for check in checks:
-                    executor.submit(self.cpu_load_check, check)
-                sleep(0.1)
+        if pingchecks:
+            checks = [_ for _ in pingchecks]
+            for check in checks:
+                tasks.append((self.ping_check, check))
 
-            if pingchecks:
-                checks = [_ for _ in pingchecks]
-                for check in checks:
-                    executor.submit(self.ping_check, check)
-                sleep(0.1)
+        if scriptchecks:
+            checks = [_ for _ in scriptchecks]
+            for check in checks:
+                tasks.append((self.script_check, check))
 
-            if scriptchecks:
-                checks = [_ for _ in scriptchecks]
-                for check in checks:
-                    executor.submit(self.script_check, check)
-                    sleep(0.3)
+        if tasks:
+            results = []
+            executor = BoundedExecutor(10, 15)
+
+            for task in tasks:
+                r = executor.submit(*task)
+                results.append(r)
+                sleep(0.2)
+
+            return [i.result() for i in results]
+        
+        else:
+            return "notasks"
 
     def run_once(self):
         self.logger.info("Running checks manually")
@@ -83,7 +112,7 @@ class CheckRunner(WindowsAgent):
             return False
         else:
             try:
-                self.run_checks(ret)
+                run = self.run_checks(ret)
             except Exception as e:
                 self.logger.error(f"Error running checks: {e}")
                 return False
@@ -96,7 +125,7 @@ class CheckRunner(WindowsAgent):
                 sleep(90)
             else:
                 try:
-                    self.run_checks(ret)
+                    run = self.run_checks(ret)
                 except Exception as e:
                     self.logger.error(f"Error running checks: {e}")
                 finally:
