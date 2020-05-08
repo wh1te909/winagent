@@ -217,7 +217,10 @@ class WindowsAgent:
         }
 
         resp = requests.patch(
-            self.check_results_url, json.dumps(payload), headers=self.headers
+            self.check_results_url,
+            json.dumps(payload),
+            headers=self.headers,
+            timeout=15,
         )
 
         if status == "failing" and data["task_on_failure"]:
@@ -253,7 +256,10 @@ class WindowsAgent:
         }
 
         resp = requests.patch(
-            self.check_results_url, json.dumps(payload), headers=self.headers
+            self.check_results_url,
+            json.dumps(payload),
+            headers=self.headers,
+            timeout=15,
         )
 
         if status == "failing" and data["task_on_failure"]:
@@ -284,7 +290,10 @@ class WindowsAgent:
             "more_info": more_info,
         }
         resp = requests.patch(
-            self.check_results_url, json.dumps(payload), headers=self.headers
+            self.check_results_url,
+            json.dumps(payload),
+            headers=self.headers,
+            timeout=15,
         )
 
         if status == "failing" and data["task_on_failure"]:
@@ -304,7 +313,10 @@ class WindowsAgent:
             "cpu_load": cpu_load,
         }
         resp = requests.patch(
-            self.check_results_url, json.dumps(payload), headers=self.headers
+            self.check_results_url,
+            json.dumps(payload),
+            headers=self.headers,
+            timeout=15,
         )
         return "ok"
 
@@ -317,7 +329,10 @@ class WindowsAgent:
             "used_ram": used_ram,
         }
         resp = requests.patch(
-            self.check_results_url, json.dumps(payload), headers=self.headers
+            self.check_results_url,
+            json.dumps(payload),
+            headers=self.headers,
+            timeout=15,
         )
         return "ok"
 
@@ -362,7 +377,10 @@ class WindowsAgent:
             "more_info": f"Status {service_status.upper()}",
         }
         resp = requests.patch(
-            self.check_results_url, json.dumps(payload), headers=self.headers
+            self.check_results_url,
+            json.dumps(payload),
+            headers=self.headers,
+            timeout=15,
         )
 
         if status == "failing" and data["task_on_failure"]:
