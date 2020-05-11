@@ -1,32 +1,11 @@
 import json
 import requests
 from time import sleep
-from random import randrange
-from concurrent.futures import ThreadPoolExecutor
-from threading import BoundedSemaphore
+import concurrent.futures
+import subprocess
+import os
 
 from agent import WindowsAgent
-
-
-# https://www.bettercodebytes.com/theadpoolexecutor-with-a-bounded-queue-in-python/
-class BoundedExecutor:
-    def __init__(self, bound, max_workers):
-        self.executor = ThreadPoolExecutor(max_workers=max_workers)
-        self.semaphore = BoundedSemaphore(bound + max_workers)
-
-    def submit(self, fn, *args, **kwargs):
-        self.semaphore.acquire()
-        try:
-            future = self.executor.submit(fn, *args, **kwargs)
-        except:
-            self.semaphore.release()
-            raise
-        else:
-            future.add_done_callback(lambda x: self.semaphore.release())
-            return future
-
-    def shutdown(self, wait=True):
-        self.executor.shutdown(wait)
 
 
 class CheckRunner(WindowsAgent):
@@ -47,7 +26,11 @@ class CheckRunner(WindowsAgent):
             return False
         else:
             try:
-                return resp.json()
+                data = resp.json()
+                if data["checks"]["total"] > 0:
+                    return data
+                else:
+                    return False
             except:
                 return False
 
@@ -92,44 +75,43 @@ class CheckRunner(WindowsAgent):
                 tasks.append((self.script_check, check))
 
         if tasks:
-            results = []
-            executor = BoundedExecutor(10, 15)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+                for task in tasks:
+                    executor.submit(*task)
 
-            for task in tasks:
-                r = executor.submit(*task)
-                results.append(r)
-                sleep(0.2)
-
-            return [i.result() for i in results]
-        
-        else:
-            return "notasks"
-
-    def run_once(self):
-        self.logger.info("Running checks manually")
+    def run(self):
         ret = self.get_checks()
         if not ret:
             return False
         else:
             try:
-                run = self.run_checks(ret)
+                self.run_checks(ret)
             except Exception as e:
                 self.logger.error(f"Error running checks: {e}")
-                return False
 
     def run_forever(self):
         self.logger.info("Checkrunner service started")
+
+        cmd = [
+            os.path.join(self.programdir, "tacticalrmm.exe"),
+            "-m",
+            "runchecks",
+        ]
+
         while 1:
-            ret = self.get_checks()
-            if not ret:
-                sleep(90)
+            interval = 90
+            try: 
+                ret = self.get_checks()
+            except:
+                sleep(interval)
             else:
-                try:
-                    run = self.run_checks(ret)
-                except Exception as e:
-                    self.logger.error(f"Error running checks: {e}")
-                finally:
+                if ret:
                     try:
-                        sleep(int(ret["check_interval"]))
-                    except:
-                        sleep(randrange(start=60, stop=120))
+                        interval = int(ret["check_interval"])
+                        r = subprocess.run(cmd, capture_output=True, timeout=500)
+                    except Exception as e:
+                        self.logger.error(f"Error running checks: {e}")
+                    finally:
+                        sleep(interval)
+                else:
+                    sleep(interval)

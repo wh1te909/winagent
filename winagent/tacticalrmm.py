@@ -29,7 +29,7 @@ if __name__ == "__main__":
         from checkrunner import CheckRunner
 
         agent = CheckRunner()
-        agent.run_once()
+        agent.run()
     elif args.mode == "winupdater":
         from winupdater import WinUpdater
 
