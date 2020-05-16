@@ -11,7 +11,7 @@ class TaskRunner(WindowsAgent):
     def __init__(self, task_pk):
         super().__init__()
         self.task_pk = task_pk
-        self.task_url = f"{self.astor.server}/automation/taskrunner/{self.task_pk}/"
+        self.task_url = f"{self.astor.server}/tasks/taskrunner/{self.task_pk}/"
 
     def run(self):
         # called manually and not from within a check
@@ -19,7 +19,6 @@ class TaskRunner(WindowsAgent):
         if not ret:
             return False
 
-        asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
         asyncio.run(self.run_task(ret))
 
     async def run_while_in_event_loop(self):

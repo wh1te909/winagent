@@ -2,22 +2,10 @@ os: windows
 
 matrix:
   include:
-  
-    - name: "Python 3.7.7"
+    - name: "Python 3.8.3"
       language: shell
       before_install:
-        - choco install python --version 3.7.7
-        - python --version
-        - python -m pip install --upgrade pip
-        - pip3 install --upgrade setuptools wheel
-      env: PATH=/c/Python37:/c/Python37/Scripts:$PATH
-      install: pip3 install -r requirements.txt -r requirements-test.txt
-      script: pytest
-  
-    - name: "Python 3.8"
-      language: shell
-      before_install:
-        - choco install python --version 3.8.2
+        - choco install python --version 3.8.3
         - python --version
         - python -m pip install --upgrade pip
         - pip3 install --upgrade setuptools wheel
@@ -25,5 +13,3 @@ matrix:
       install: pip3 install -r requirements.txt -r requirements-test.txt
       script: pytest
 
-  allow_failures:
-      - name: "Python 3.8"
