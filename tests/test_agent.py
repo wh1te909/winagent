@@ -23,10 +23,6 @@ def test_boot_time(agent):
     assert type(agent.get_boot_time()) is float
 
 
-def test_cpu_load(agent):
-    assert type(agent.get_cpu_load()) is float
-
-
 def test_used_ram(agent):
     assert type(agent.get_used_ram()) is int
 

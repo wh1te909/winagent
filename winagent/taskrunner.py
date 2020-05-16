@@ -1,6 +1,7 @@
 import json
 import requests
 import subprocess
+import asyncio
 from time import perf_counter
 
 from agent import WindowsAgent
@@ -13,11 +14,21 @@ class TaskRunner(WindowsAgent):
         self.task_url = f"{self.astor.server}/automation/taskrunner/{self.task_pk}/"
 
     def run(self):
+        # called manually and not from within a check
         ret = self.get_task()
         if not ret:
             return False
-        else:
-            self.run_task(ret)
+
+        asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+        asyncio.run(self.run_task(ret))
+
+    async def run_while_in_event_loop(self):
+        # called from inside a check
+        ret = self.get_task()
+        if not ret:
+            return False
+
+        await asyncio.gather(self.run_task(ret))
 
     def get_task(self):
         try:
@@ -27,13 +38,12 @@ class TaskRunner(WindowsAgent):
         else:
             return resp.json()
 
-    def run_task(self, data):
+    async def run_task(self, data):
 
         try:
             script = data["script"]
             timeout = data["timeout"]
-        except Exception as e:
-            self.logger.error(e)
+        except:
             return False
 
         try:
@@ -54,19 +64,41 @@ class TaskRunner(WindowsAgent):
                 ]
 
             start = perf_counter()
-            r = subprocess.run(cmd, capture_output=True)
+
+            proc = await asyncio.create_subprocess_exec(
+                *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+            )
+
+            proc_timeout = int(timeout) + 2
+
+            try:
+                proc_stdout, proc_stderr = await asyncio.wait_for(
+                    proc.communicate(), proc_timeout
+                )
+            except asyncio.TimeoutError:
+                try:
+                    proc.terminate()
+                except:
+                    pass
+
+                self.logger.error(f"Task timed out after {timeout} seconds")
+                proc_stdout, proc_stderr = False, False
+                stdout = ""
+                stderr = f"Task timed out after {timeout} seconds"
+                retcode = 98
+
             stop = perf_counter()
 
-            if r.stdout:
-                resp = json.loads(r.stdout.decode("utf-8", errors="ignore"))
+            if proc_stdout:
+                resp = json.loads(proc_stdout.decode("utf-8", errors="ignore"))
                 retcode = resp["local"]["retcode"]
                 stdout = resp["local"]["stdout"]
                 stderr = resp["local"]["stderr"]
 
-            elif r.stderr:
+            elif proc_stderr:
                 retcode = 99
                 stdout = ""
-                stderr = r.stderr.decode("utf-8", errors="ignore")
+                stderr = proc_stderr.decode("utf-8", errors="ignore")
 
             payload = {
                 "stdout": stdout,
@@ -79,7 +111,7 @@ class TaskRunner(WindowsAgent):
                 self.task_url, json.dumps(payload), headers=self.headers, timeout=15,
             )
 
-        except Exception as e:
-            self.logger.error(e)
+        except:
+            pass
 
         return "ok"

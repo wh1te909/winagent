@@ -3,12 +3,9 @@ import queue
 import threading
 import os
 from time import sleep
-import multiprocessing
 
 
 if __name__ == "__main__":
-
-    multiprocessing.freeze_support()
 
     parser = argparse.ArgumentParser(description="Tactical RMM Windows Agent")
     parser.add_argument("-m", action="store", dest="mode", type=str)
@@ -20,16 +17,19 @@ if __name__ == "__main__":
 
         agent = WinAgentSvc()
         agent.run()
+
     elif args.mode == "checkrunner":
         from checkrunner import CheckRunner
 
         agent = CheckRunner()
         agent.run_forever()
+
     elif args.mode == "runchecks":
         from checkrunner import CheckRunner
 
         agent = CheckRunner()
-        agent.run_once()
+        agent.run()
+
     elif args.mode == "winupdater":
         from winupdater import WinUpdater
 
@@ -53,11 +53,13 @@ if __name__ == "__main__":
 
         agent = WindowsAgent()
         agent.update_salt()
+
     elif args.mode == "cleanup":
         from agent import WindowsAgent
 
         agent = WindowsAgent()
         agent.cleanup()
+
     else:
         import PySimpleGUI as sg
         import psutil

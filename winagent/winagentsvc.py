@@ -13,7 +13,7 @@ class WinAgentSvc(WindowsAgent):
         self.hello_url = f"{self.astor.server}/api/v1/hello/"
 
     def run(self):
-        self.logger.info("Agent started.")
+        self.logger.info("Agent service started.")
         # wait a bit before starting otherwise boot_time will be inaccurate
         sleep(randrange(start=10, stop=20))
         try:
@@ -28,7 +28,9 @@ class WinAgentSvc(WindowsAgent):
                 "antivirus": self.get_av(),
                 "boot_time": self.get_boot_time(),
             }
-            requests.patch(self.update_url, json.dumps(info), headers=self.headers)
+            r = requests.patch(
+                self.update_url, json.dumps(info), headers=self.headers, timeout=30
+            )
         except:
             pass
 
@@ -46,8 +48,11 @@ class WinAgentSvc(WindowsAgent):
                     "logged_in_username": self.get_logged_on_user(),
                 }
 
-                requests.patch(
-                    self.hello_url, json.dumps(payload), headers=self.headers
+                r = requests.patch(
+                    self.hello_url,
+                    json.dumps(payload),
+                    headers=self.headers,
+                    timeout=30,
                 )
             except:
                 pass
