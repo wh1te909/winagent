@@ -1,3 +1,4 @@
+import asyncio
 import wmi
 import platform
 import socket
@@ -18,6 +19,7 @@ import logging
 from time import sleep, perf_counter
 import shutil
 from ctypes.wintypes import BYTE, WORD, DWORD, WCHAR
+
 
 kernel32 = ctypes.WinDLL(str("kernel32"), use_last_error=True)
 db = peewee.SqliteDatabase("C:\\Program Files\\TacticalAgent\\agentdb.db")
@@ -163,115 +165,152 @@ class WindowsAgent:
         )
         self.check_results_url = f"{self.astor.server}/checks/checkresults/"
 
-    def script_check(self, data):
+    async def script_check(self, data):
 
-        script_path = data["script"]["filepath"]
-        shell = data["script"]["shell"]
-        timeout = data["timeout"]
-        script_filename = data["script"]["filename"]
+        try:
+            script_path = data["script"]["filepath"]
+            shell = data["script"]["shell"]
+            timeout = data["timeout"]
+            script_filename = data["script"]["filename"]
 
-        if shell == "python":
-            cmd = [
-                self.salt_call,
-                "win_agent.run_python_script",
-                script_filename,
-                f"timeout={timeout}",
-            ]
-        else:
-            cmd = [
-                self.salt_call,
-                "cmd.script",
-                script_path,
-                f"shell={shell}",
-                f"timeout={timeout}",
-            ]
-
-        start = perf_counter()
-        r = subprocess.run(cmd, capture_output=True)
-        stop = perf_counter()
-
-        if r.stdout:
-            resp = json.loads(r.stdout.decode("utf-8", errors="ignore"))
-            retcode = resp["local"]["retcode"]
-            stdout = resp["local"]["stdout"]
-            stderr = resp["local"]["stderr"]
-
-        elif r.stderr:
-            retcode = 99
-            stdout = ""
-            stderr = r.stderr.decode("utf-8", errors="ignore")
-
-        if retcode != 0:
-            status = "failing"
-        else:
-            status = "passing"
-
-        payload = {
-            "stdout": stdout,
-            "stderr": stderr,
-            "status": status,
-            "retcode": retcode,
-            "id": data["id"],
-            "check_type": data["check_type"],
-            "execution_time": "{:.4f}".format(round(stop - start)),
-        }
-
-        resp = requests.patch(
-            self.check_results_url,
-            json.dumps(payload),
-            headers=self.headers,
-            timeout=15,
-        )
-
-        if status == "failing" and data["task_on_failure"]:
-            from taskrunner import TaskRunner
-
-            task = TaskRunner(task_pk=data["task_on_failure"])
-            task.run()
-
-        return status
-
-    def ping_check(self, data):
-
-        r = subprocess.run(["ping", data["ip"]], capture_output=True)
-
-        success = ["Reply", "bytes", "time", "TTL"]
-
-        if r.stdout:
-            output = r.stdout.decode("utf-8", errors="ignore")
-            if all(x in output for x in success):
-                status = "passing"
+            if shell == "python":
+                cmd = [
+                    self.salt_call,
+                    "win_agent.run_python_script",
+                    script_filename,
+                    f"timeout={timeout}",
+                ]
             else:
+                cmd = [
+                    self.salt_call,
+                    "cmd.script",
+                    script_path,
+                    f"shell={shell}",
+                    f"timeout={timeout}",
+                ]
+
+            start = perf_counter()
+
+            proc = await asyncio.create_subprocess_exec(
+                *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+            )
+
+            proc_timeout = int(timeout) + 2
+
+            try:
+                proc_stdout, proc_stderr = await asyncio.wait_for(
+                    proc.communicate(), proc_timeout
+                )
+            except asyncio.TimeoutError:
+                try:
+                    proc.terminate()
+                except:
+                    pass
+
+                self.logger.error(f"Script check timed out after {timeout} seconds")
+                proc_stdout, proc_stderr = False, False
+                stdout = ""
+                stderr = f"Script timed out after {timeout} seconds"
+                retcode = 98
+
+            stop = perf_counter()
+
+            if proc_stdout:
+                resp = json.loads(proc_stdout.decode("utf-8", errors="ignore"))
+                retcode = resp["local"]["retcode"]
+                stdout = resp["local"]["stdout"]
+                stderr = resp["local"]["stderr"]
+
+            elif proc_stderr:
+                retcode = 99
+                stdout = ""
+                stderr = proc_stderr.decode("utf-8", errors="ignore")
+
+            if retcode != 0:
                 status = "failing"
+            else:
+                status = "passing"
 
-        elif r.stderr:
-            status = "failing"
-            output = r.stderr.decode("utf-8", errors="ignore")
+            payload = {
+                "stdout": stdout,
+                "stderr": stderr,
+                "status": status,
+                "retcode": retcode,
+                "id": data["id"],
+                "check_type": data["check_type"],
+                "execution_time": "{:.4f}".format(round(stop - start)),
+            }
 
-        payload = {
-            "id": data["id"],
-            "status": status,
-            "more_info": output,
-            "check_type": data["check_type"],
-        }
+            resp = requests.patch(
+                self.check_results_url,
+                json.dumps(payload),
+                headers=self.headers,
+                timeout=15,
+            )
 
-        resp = requests.patch(
-            self.check_results_url,
-            json.dumps(payload),
-            headers=self.headers,
-            timeout=15,
-        )
+            if status == "failing" and data["task_on_failure"]:
+                from taskrunner import TaskRunner
 
-        if status == "failing" and data["task_on_failure"]:
-            from taskrunner import TaskRunner
+                task = TaskRunner(task_pk=data["task_on_failure"])
+                await task.run_while_in_event_loop()
 
-            task = TaskRunner(task_pk=data["task_on_failure"])
-            task.run()
+            return status
+        except:
+            return "failing"
 
-        return status
+    async def ping_check(self, data):
+        try:
+            cmd = ["ping", data["ip"]]
+            r = await asyncio.create_subprocess_exec(
+                *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+            )
 
-    def disk_check(self, data):
-        disk = psutil.disk_usage(data["disk"])
+            stdout, stderr = await r.communicate()
+
+            success = ["Reply", "bytes", "time", "TTL"]
+
+            if stdout:
+                output = stdout.decode("utf-8", errors="ignore")
+                if all(x in output for x in success):
+                    status = "passing"
+                else:
+                    status = "failing"
+
+            elif stderr:
+                status = "failing"
+                output = stderr.decode("utf-8", errors="ignore")
+
+            payload = {
+                "id": data["id"],
+                "status": status,
+                "more_info": output,
+                "check_type": data["check_type"],
+            }
+
+            resp = requests.patch(
+                self.check_results_url,
+                json.dumps(payload),
+                headers=self.headers,
+                timeout=15,
+            )
+
+            if status == "failing" and data["task_on_failure"]:
+                from taskrunner import TaskRunner
+
+                task = TaskRunner(task_pk=data["task_on_failure"])
+                await task.run_while_in_event_loop()
+
+            return status
+        except:
+            return "failing"
+
+    async def disk_check(self, data):
+        try:
+            disk = psutil.disk_usage(data["disk"])
+        except Exception:
+            self.logger.error(f"Disk {data['disk']} does not exist")
+            return "failing"
+
         percent_used = round(disk.percent)
         total = bytes2human(disk.total)
         free = bytes2human(disk.free)
@@ -300,96 +339,108 @@ class WindowsAgent:
             from taskrunner import TaskRunner
 
             task = TaskRunner(task_pk=data["task_on_failure"])
-            task.run()
+            await task.run_while_in_event_loop()
 
         return status
 
-    def cpu_load_check(self, data):
-        cpu_load = round(self.get_cpu_load())
+    async def cpu_load_check(self, data):
+        try:
+            psutil.cpu_percent(interval=0)
+            await asyncio.sleep(5)
+            cpu_load = round(psutil.cpu_percent(interval=0))
 
-        payload = {
-            "id": data["id"],
-            "check_type": data["check_type"],
-            "cpu_load": cpu_load,
-        }
-        resp = requests.patch(
-            self.check_results_url,
-            json.dumps(payload),
-            headers=self.headers,
-            timeout=15,
-        )
-        return "ok"
+            payload = {
+                "id": data["id"],
+                "check_type": data["check_type"],
+                "cpu_load": cpu_load,
+            }
+            resp = requests.patch(
+                self.check_results_url,
+                json.dumps(payload),
+                headers=self.headers,
+                timeout=15,
+            )
+            return "ok"
+        except:
+            return False
 
-    def mem_check(self, data):
-        used_ram = self.get_used_ram()
+    async def mem_check(self, data):
+        try:
+            used_ram = self.get_used_ram()
 
-        payload = {
-            "id": data["id"],
-            "check_type": data["check_type"],
-            "used_ram": used_ram,
-        }
-        resp = requests.patch(
-            self.check_results_url,
-            json.dumps(payload),
-            headers=self.headers,
-            timeout=15,
-        )
-        return "ok"
+            payload = {
+                "id": data["id"],
+                "check_type": data["check_type"],
+                "used_ram": used_ram,
+            }
+            resp = requests.patch(
+                self.check_results_url,
+                json.dumps(payload),
+                headers=self.headers,
+                timeout=15,
+            )
+            return "ok"
+        except:
+            return False
 
-    def win_service_check(self, data):
-        services = self.get_services()
-        service = list(filter(lambda x: x["name"] == data["svc_name"], services))[0]
+    async def win_service_check(self, data):
+        try:
+            services = self.get_services()
+            service = list(filter(lambda x: x["name"] == data["svc_name"], services))[0]
 
-        service_status = service["status"]
+            service_status = service["status"]
 
-        if service_status == "running":
-            status = "passing"
+            if service_status == "running":
+                status = "passing"
 
-        elif service_status == "start_pending" and data["pass_if_start_pending"]:
-            status = "passing"
+            elif service_status == "start_pending" and data["pass_if_start_pending"]:
+                status = "passing"
 
-        else:
-            status = "failing"
+            else:
+                status = "failing"
 
-            if data["restart_if_stopped"]:
-                ret = self.salt_call_ret_bool(
-                    cmd="service.restart", args=data["svc_name"], timeout=60,
-                )
-                sleep(15)
-                reloaded = self.get_services()
-                stat = list(filter(lambda x: x["name"] == data["svc_name"], reloaded))[
-                    0
-                ]["status"]
+                if data["restart_if_stopped"]:
+                    ret = self.salt_call_ret_bool(
+                        cmd="service.restart", args=data["svc_name"], timeout=60,
+                    )
+                    # wait a bit to give service time to start before checking status again
+                    await asyncio.sleep(10)
+                    reloaded = self.get_services()
+                    stat = list(
+                        filter(lambda x: x["name"] == data["svc_name"], reloaded)
+                    )[0]["status"]
 
-                if stat == "running":
-                    status = "passing"
-                elif stat == "start_pending" and data["pass_if_start_pending"]:
-                    status = "passing"
-                else:
-                    status = "failing"
+                    if stat == "running":
+                        status = "passing"
+                    elif stat == "start_pending" and data["pass_if_start_pending"]:
+                        status = "passing"
+                    else:
+                        status = "failing"
 
-                service_status = stat
+                    service_status = stat
 
-        payload = {
-            "id": data["id"],
-            "check_type": data["check_type"],
-            "status": status,
-            "more_info": f"Status {service_status.upper()}",
-        }
-        resp = requests.patch(
-            self.check_results_url,
-            json.dumps(payload),
-            headers=self.headers,
-            timeout=15,
-        )
+            payload = {
+                "id": data["id"],
+                "check_type": data["check_type"],
+                "status": status,
+                "more_info": f"Status {service_status.upper()}",
+            }
+            resp = requests.patch(
+                self.check_results_url,
+                json.dumps(payload),
+                headers=self.headers,
+                timeout=15,
+            )
 
-        if status == "failing" and data["task_on_failure"]:
-            from taskrunner import TaskRunner
+            if status == "failing" and data["task_on_failure"]:
+                from taskrunner import TaskRunner
 
-            task = TaskRunner(task_pk=data["task_on_failure"])
-            task.run()
+                task = TaskRunner(task_pk=data["task_on_failure"])
+                await task.run_while_in_event_loop()
 
-        return "ok"
+            return status
+        except:
+            return "failing"
 
     def get_db(self):
         with db:
@@ -399,9 +450,6 @@ class WindowsAgent:
 
     def get_boot_time(self):
         return psutil.boot_time()
-
-    def get_cpu_load(self):
-        return psutil.cpu_percent(interval=5)
 
     def get_used_ram(self):
         return round(psutil.virtual_memory().percent)
@@ -435,9 +483,9 @@ class WindowsAgent:
         except Exception:
             return "error"
 
-    def get_cmd_output(self, cmd):
+    def get_cmd_output(self, cmd, timeout=30):
         try:
-            r = subprocess.run(cmd, capture_output=True)
+            r = subprocess.run(cmd, capture_output=True, timeout=timeout)
         except Exception:
             return "error getting output"
 
@@ -499,6 +547,7 @@ class WindowsAgent:
                 "displayName" "/FORMAT:List",
             ],
             capture_output=True,
+            timeout=30,
         )
 
         if r.stdout:
@@ -527,7 +576,7 @@ class WindowsAgent:
             else:
                 command = [self.salt_call, cmd, "--local", f"--timeout={timeout}"]
 
-            r = subprocess.run(command, capture_output=True)
+            r = subprocess.run(command, capture_output=True, timeout=timeout)
         except Exception:
             return False
         else:
@@ -543,25 +592,26 @@ class WindowsAgent:
     def update_salt(self):
         self.logger.info("Updating salt")
 
+        get_minion = requests.get(self.salt_minion_exe, stream=True,)
+        if get_minion.status_code != 200:
+            self.logger.error("Unable to download salt-minion. Aborting")
+            return False
+
         minion_file = os.path.join(self.programdir, "salt-minion-setup.exe")
         if os.path.exists(minion_file):
             os.remove(minion_file)
 
-        services = ("checkrunner",)
-        for svc in services:
-            subprocess.run(["sc", "stop", svc])
-
-        get_minion = requests.get(self.salt_minion_exe, stream=True,)
-        if get_minion.status_code != 200:
-            self.logger.error("Unable to download salt-minion")
-            return False
-
+        sleep(1)
         with open(minion_file, "wb") as f:
             for chunk in get_minion.iter_content(chunk_size=1024):
                 if chunk:
                     f.write(chunk)
 
         del get_minion
+
+        p_stop = subprocess.run(
+            ["sc", "stop", "checkrunner"], capture_output=True, timeout=60
+        )
 
         r = subprocess.run(
             [
@@ -573,11 +623,15 @@ class WindowsAgent:
                 "/start-minion=1",
             ],
             cwd=self.programdir,
+            capture_output=True,
+            timeout=600,
         )
 
         sleep(10)
-        for svc in services:
-            subprocess.run(["sc", "start", svc])
+
+        p_start = subprocess.run(
+            ["sc", "start", "checkrunner"], capture_output=True, timeout=60
+        )
 
         self.logger.info(f"Salt was updated, return code: {r.returncode}")
         return True

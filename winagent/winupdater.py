@@ -24,6 +24,7 @@ class WinUpdater(WindowsAgent):
                 "--local",
             ],
             capture_output=True,
+            timeout=7200,
         )
 
         return r.stdout.decode("utf-8", errors="ignore")

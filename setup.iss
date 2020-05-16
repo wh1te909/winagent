@@ -1,5 +1,5 @@
 #define MyAppName "Tactical RMM Agent"
-#define MyAppVersion "v0.5.3"
+#define MyAppVersion "0.6.0"
 #define MyAppPublisher "wh1te909"
 #define MyAppURL "https://github.com/wh1te909"
 #define MyAppExeName "tacticalrmm.exe"
@@ -20,7 +20,7 @@ AppUpdatesURL={#MyAppURL}
 DefaultDirName="C:\Program Files\TacticalAgent"
 DisableDirPage=yes
 DisableProgramGroupPage=yes
-OutputBaseFilename=winagent-{#MyAppVersion}
+OutputBaseFilename=winagent-v{#MyAppVersion}
 SetupIconFile=C:\Users\Public\Documents\tacticalagent\bin\onit.ico
 WizardSmallImageFile=C:\Users\Public\Documents\tacticalagent\bin\onit.bmp
 UninstallDisplayIcon={app}\{#MyAppExeName}

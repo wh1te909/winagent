@@ -5,7 +5,9 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/python/black)
 
-#### Building (powershell, python3.7.7)
+#### Building (powershell, python 3.7.7)
+
+Download and install [Inno Setup](http://jrsoftware.org/isinfo.php)
 
 ```commandline
 mkdir 'C:\Users\Public\Documents\tacticalagent'
@@ -17,11 +19,7 @@ python -m pip install --upgrade pip
 pip install --upgrade setuptools wheel
 pip install --no-cache-dir -r requirements.txt
 cd winagent
-pyinstaller --clean --noconsole --uac-admin --noupx --icon=..\bin\onit.ico .\tacticalrmm.py
+.\build.ps1
 ```
-
-Download and install [Inno Setup](http://jrsoftware.org/isinfo.php)
-
-Open ```setup.iss``` with Inno Setup and compile.
 
 Exe will be in ```C:\Users\Public\Documents\tacticalagent\Output```
