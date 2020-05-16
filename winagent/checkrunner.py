@@ -84,7 +84,6 @@ class CheckRunner(WindowsAgent):
             return False
         else:
             try:
-                asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
                 asyncio.run(self.run_checks(ret))
             except Exception as e:
                 self.logger.error(f"Error running manual checks: {e}")
@@ -103,9 +102,6 @@ class CheckRunner(WindowsAgent):
                 if ret:
                     try:
                         interval = int(ret["check_interval"])
-                        asyncio.set_event_loop_policy(
-                            asyncio.WindowsProactorEventLoopPolicy()
-                        )
                         asyncio.run(self.run_checks(ret))
                     except:
                         pass

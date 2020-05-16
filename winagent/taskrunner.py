@@ -19,7 +19,6 @@ class TaskRunner(WindowsAgent):
         if not ret:
             return False
 
-        asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
         asyncio.run(self.run_task(ret))
 
     async def run_while_in_event_loop(self):
