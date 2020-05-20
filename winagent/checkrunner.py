@@ -40,6 +40,7 @@ class CheckRunner(WindowsAgent):
             winservicechecks = data["winservicechecks"]
             pingchecks = data["pingchecks"]
             scriptchecks = data["scriptchecks"]
+            eventlogchecks = data["eventlogchecks"]
             tasks = []
 
             if cpuloadchecks:
@@ -71,6 +72,11 @@ class CheckRunner(WindowsAgent):
                 checks = [_ for _ in winservicechecks]
                 for check in checks:
                     tasks.append(self.win_service_check(check))
+            
+            if eventlogchecks:
+                checks = [_ for _ in eventlogchecks]
+                for check in checks:
+                    tasks.append(self.event_log_check(check))
 
             if tasks:
                 await asyncio.gather(*tasks)
