@@ -18,6 +18,10 @@ import peewee
 import logging
 from time import sleep, perf_counter
 import shutil
+import win32evtlog
+import win32con
+import win32evtlogutil
+import winerror
 from ctypes.wintypes import BYTE, WORD, DWORD, WCHAR
 
 
@@ -440,6 +444,130 @@ class WindowsAgent:
 
             return status
         except:
+            return "failing"
+    
+    async def event_log_check(self, data):
+        try:
+            log = []
+
+            api_log_name = data["log_name"]
+            api_event_id = int(data["event_id"])
+            api_event_type = data["event_type"]
+            api_fail_when = data["fail_when"]
+            api_search_last_days = int(data["search_last_days"])
+
+            if api_search_last_days != 0:
+                start_time = dt.datetime.now() - dt.timedelta(days=api_search_last_days)
+            
+
+            flags = win32evtlog.EVENTLOG_BACKWARDS_READ | win32evtlog.EVENTLOG_SEQUENTIAL_READ
+
+            status_dict = {
+                win32con.EVENTLOG_AUDIT_FAILURE: "AUDIT_FAILURE",
+                win32con.EVENTLOG_AUDIT_SUCCESS: "AUDIT_SUCCESS",
+                win32con.EVENTLOG_INFORMATION_TYPE: "INFO",
+                win32con.EVENTLOG_WARNING_TYPE: "WARNING",
+                win32con.EVENTLOG_ERROR_TYPE: "ERROR",
+                0: "INFO",
+            }
+
+            hand = win32evtlog.OpenEventLog("localhost", api_log_name)
+            total = win32evtlog.GetNumberOfEventLogRecords(hand)
+            uid = 0
+            done = False
+
+            while 1:
+
+                events = win32evtlog.ReadEventLog(hand, flags, 0)
+                for ev_obj in events:
+
+                    uid += 1
+                    # return once total number of events reach or we'll be stuck in an infinite loop
+                    if uid >= total:
+                        done = True
+                        break
+                    
+                    the_time = ev_obj.TimeGenerated.Format()
+                    time_obj = dt.datetime.strptime(the_time, "%c")
+
+                    if api_search_last_days != 0:
+                        if time_obj < start_time:
+                            done = True
+                            break
+
+                    computer = str(ev_obj.ComputerName)
+                    src = str(ev_obj.SourceName)
+                    evt_type = str(status_dict[ev_obj.EventType])
+                    evt_id = str(winerror.HRESULT_CODE(ev_obj.EventID))
+                    evt_category = str(ev_obj.EventCategory)
+                    record = str(ev_obj.RecordNumber)
+                    msg = (
+                        str(win32evtlogutil.SafeFormatMessage(ev_obj, api_log_name))
+                        .replace("<", "")
+                        .replace(">", "")
+                    )
+
+                    event_dict = {
+                        "computer": computer,
+                        "source": src,
+                        "eventType": evt_type,
+                        "eventID": evt_id,
+                        "eventCategory": evt_category,
+                        "message": msg,
+                        "time": the_time,
+                        "record": record,
+                        "uid": uid,
+                    }
+
+                    if int(evt_id) == api_event_id and evt_type == api_event_type:
+                        log.append(event_dict)
+                
+                if done:
+                    break
+            
+            win32evtlog.CloseEventLog(hand)
+
+            if api_fail_when == "contains":
+                if log:
+                    status = "failing"
+                    more_info = {"log": log}
+                else:
+                    status = "passing"
+                    more_info = {"log": []}
+            
+            elif api_fail_when == "not_contains":
+                if log:
+                    status = "passing"
+                    more_info = {"log": log}
+                else:
+                    status = "failing"
+                    more_info = {"log": []}
+            else:
+                status = "failing"
+                more_info = {"log": []}
+            
+            payload = {
+                "id": data["id"],
+                "check_type": data["check_type"],
+                "status": status,
+                "more_info": more_info,
+            }
+            resp = requests.patch(
+                self.check_results_url,
+                json.dumps(payload),
+                headers=self.headers,
+                timeout=15,
+            )
+
+            if status == "failing" and data["task_on_failure"]:
+                from taskrunner import TaskRunner
+
+                task = TaskRunner(task_pk=data["task_on_failure"])
+                await task.run_while_in_event_loop()
+
+            return status
+        except Exception as e:
+            self.logger.error(f"Event log check failed: {e}")
             return "failing"
 
     def get_db(self):
