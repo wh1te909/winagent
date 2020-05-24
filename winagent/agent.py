@@ -10,6 +10,7 @@ import subprocess
 import json
 import psutil
 import os
+import signal
 import math
 import validators
 import datetime as dt
@@ -775,6 +776,70 @@ class WindowsAgent:
             os.system('rmdir /S /Q "{}"'.format("C:\\salt"))
         except Exception:
             pass
+
+    def fix_salt(self, by_time=True):
+        """
+        Script checks use salt-call, which for whatever reason becomes unstable after around 24 hours of uptime
+        This leads to tons of hung python processes not being killed even with timeout set in salt's cmd.script module
+        This function runs every hour as a scheduled task to clean up hung processes
+        """
+
+        # strings that will be in the scriptchecks command line args
+        # we check to see if any of these are in our long running processes
+        # we don't want to kill salt's main process, just the ones that have
+        # any of the following args
+        script_checks = (
+            "win_agent.run_python_script",
+            "salt-call",
+            "userdefined",
+            "salt://scripts",
+            "cmd.script",
+        )
+
+        pids = []
+
+        for proc in psutil.process_iter():
+            with proc.oneshot():
+                if proc.name() == "python.exe" or proc.name == "pythonw.exe":
+                    if "salt" in proc.exe():
+                        if any(_ in proc.cmdline() for _ in script_checks):
+                            if by_time:
+                                # psutil returns the process creation time as seconds since epoch
+                                # convert it and the current local time now to utc so we can compare them
+                                proc_ct = dt.datetime.fromtimestamp(
+                                    proc.create_time()
+                                ).replace(tzinfo=dt.timezone.utc)
+
+                                utc_now = dt.datetime.now(dt.timezone.utc)
+
+                                # seconds since the process was created
+                                seconds = int(abs(utc_now - proc_ct).total_seconds())
+
+                                # if process has been running for > 24 hours, need to kill it
+                                if seconds > 86_400:
+                                    pids.append(proc.pid)
+
+                            else:
+                                # if we are uninstalling, don't care about time.
+                                # kill everything that's hung
+                                pids.append(proc.pid)
+
+        if pids:
+            this_proc = os.getpid()
+            for pid in pids:
+                if pid == this_proc:
+                    # don't kill myself
+                    continue
+                try:
+                    parent = psutil.Process(pid)
+                    children = parent.children(recursive=True)
+                    children.append(parent)
+                    for p in children:
+                        p.send_signal(signal.SIGTERM)
+
+                    gone, alive = psutil.wait_procs(children, timeout=10, callback=None)
+                except Exception:
+                    pass
 
 
 def show_agent_status(window, gui):

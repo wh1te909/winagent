@@ -87,12 +87,20 @@ if __name__ == "__main__":
         from agent import WindowsAgent
 
         agent = WindowsAgent()
+        agent.fix_salt(by_time=False)
         agent.update_salt()
 
+    elif args.mode == "fixsalt":
+        from agent import WindowsAgent
+
+        agent = WindowsAgent()
+        agent.fix_salt()
+    
     elif args.mode == "cleanup":
         from agent import WindowsAgent
 
         agent = WindowsAgent()
+        agent.fix_salt(by_time=False)
         agent.cleanup()
 
     else:
