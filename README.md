@@ -18,7 +18,7 @@ python -m venv env
 python -m pip install --upgrade pip
 pip install --upgrade setuptools wheel
 pip install --no-cache-dir -r requirements.txt
-cd winagent
+python .\env\Scripts\pywin32_postinstall.py -install
 .\build.ps1
 ```
 

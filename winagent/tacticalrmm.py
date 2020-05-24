@@ -1,18 +1,53 @@
-import argparse
-import queue
-import threading
 import os
-from time import sleep
+import argparse
 
 
 if __name__ == "__main__":
 
-    parser = argparse.ArgumentParser(description="Tactical RMM Windows Agent")
+    parser = argparse.ArgumentParser(description="Tactical RMM Agent")
     parser.add_argument("-m", action="store", dest="mode", type=str)
     parser.add_argument("-p", action="store", dest="taskpk", type=int)
+    parser.add_argument("--api", action="store", dest="api_url", type=str)
+    parser.add_argument("--client-id", action="store", dest="client_id", type=int)
+    parser.add_argument("--site-id", action="store", dest="site_id", type=int)
+    parser.add_argument(
+        "--desc", action="store", dest="agent_desc", type=str, default="changeme"
+    )
+    parser.add_argument(
+        "--agent-type",
+        action="store",
+        dest="agent_type",
+        type=str,
+        default="server",
+        choices=["server", "workstation"],
+    )
+    parser.add_argument("--auth", action="store", dest="auth_token", type=str)
     args = parser.parse_args()
 
-    if args.mode == "winagentsvc":
+    if args.mode == "install":
+        import sys
+        import threading
+
+        if len(sys.argv) != 15:
+            parser.print_help()
+            raise SystemExit()
+
+        from installer import Installer
+
+        installer = Installer(
+            api_url=args.api_url,
+            client_id=args.client_id,
+            site_id=args.site_id,
+            agent_desc=args.agent_desc,
+            agent_type=args.agent_type,
+            auth_token=args.auth_token,
+        )
+
+        t = threading.Thread(target=installer.install, daemon=True)
+        t.start()
+        t.join()
+
+    elif args.mode == "winagentsvc":
         from winagentsvc import WinAgentSvc
 
         agent = WinAgentSvc()
@@ -61,79 +96,13 @@ if __name__ == "__main__":
         agent.cleanup()
 
     else:
-        import PySimpleGUI as sg
-        import psutil
-        import ctypes
+        import win32gui
+        from agent import show_agent_status
 
-        if not ctypes.windll.shell32.IsUserAnAdmin():
-            sg.ChangeLookAndFeel("Reddit")
-            sg.Popup("Must be run as administrator!")
-            raise SystemExit()
+        window = win32gui.GetForegroundWindow()
 
-        try:
-            service = psutil.win_service_get("tacticalagent")
-        except psutil.NoSuchProcess:
-
-            gui_queue = queue.Queue()
-
-            sg.SetOptions(
-                font=("Helvetica", 12), icon=os.path.join(os.getcwd(), "onit.ico")
-            )
-            sg.ChangeLookAndFeel("Reddit")
-            layout = [
-                [sg.Output(size=(50, 12))],
-                [sg.Button("Close", key="exit", visible=False)],
-            ]
-
-            window = (
-                sg.Window("Tactical RMM", disable_close=True,).Layout(layout).Finalize()
-            )
-            window.Hide()  # hack to run in main thread and run the install in background thread so tkinter doesn't crash
-
-            started = True
-            while 1:
-                event, values = window.Read(timeout=100)
-                if event is None:
-                    pass
-
-                elif started:
-                    try:
-                        from installer import Installer
-
-                        install = Installer()
-                        install.pre_install()
-                        window.UnHide()
-                        threading.Thread(
-                            target=install.install_all, args=(gui_queue,), daemon=True
-                        ).start()
-                        started = False
-
-                    except Exception as e:
-                        print(e)
-                    finally:
-                        started = False
-
-                elif event == "exit":
-                    break
-
-                try:
-                    message = gui_queue.get_nowait()
-                except queue.Empty:
-                    message = None
-
-                if (
-                    message != "installfinished"
-                    and message != "installerror"
-                    and message != None
-                ):
-                    print(message)
-
-                if message == "installfinished" or message == "installerror":
-                    window.Element("exit").Update(visible=True)
-
-            window.Close()
+        if window == 0:
+            # called from cli with no interactive desktop
+            show_agent_status(window=None, gui=False)
         else:
-            from installer import AgentGUI
-
-            agent = AgentGUI()
-            agent.show_status()
+            show_agent_status(window=window, gui=True)
