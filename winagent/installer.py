@@ -137,16 +137,21 @@ class Installer:
         ret = subprocess.run([mesh, "-fullinstall"], capture_output=True)
         sleep(10)
 
+        # meshcentral changed their installation path recently
+        mesh_one = os.path.join("C:\\Program Files\\Mesh Agent", "MeshAgent.exe")
+        mesh_two = os.path.join("C:\\Program Files\\mesh\\Mesh Agent", "MeshAgent.exe")
+
+        if os.path.exists(mesh_one):
+            mesh_exe = mesh_one
+        elif os.path.exists(mesh_two):
+            mesh_exe = mesh_two
+        else:
+            mesh_exe = mesh
+
         mesh_attempts = 0
         while 1:
             try:
-                mesh_cmd = subprocess.run(
-                    [
-                        "C:\\Program Files\\mesh\\Mesh Agent\\MeshAgent.exe",
-                        "-nodeidhex",
-                    ],
-                    capture_output=True,
-                )
+                mesh_cmd = subprocess.run([mesh_exe, "-nodeidhex"], capture_output=True)
                 mesh_node_id = mesh_cmd.stdout.decode().strip()
             except Exception:
                 mesh_attempts += 1
