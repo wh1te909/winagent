@@ -15,10 +15,6 @@ def agent(self):
     return WindowsAgent()
 
 
-def test_os(agent):
-    assert "Microsoft Windows" in agent.get_os()
-
-
 def test_boot_time(agent):
     assert type(agent.get_boot_time()) is float
 
@@ -31,15 +27,13 @@ def test_total_ram(agent):
     assert type(agent.get_total_ram()) is int
 
 
+@pytest.mark.skipif("TRAVIS" in os.environ, reason="doesn't work in travis")
 def test_services(agent):
-    if "TRAVIS" in os.environ:
-        assert 1 == 1
-    else:
-        services = agent.get_services()
-        spooler = list(filter(lambda x: x["name"] == "Spooler", services))[0]
-        assert type(services) is list
-        assert spooler["display_name"] == "Print Spooler"
-        assert spooler["username"] == "LocalSystem"
+    services = agent.get_services()
+    spooler = list(filter(lambda x: x["name"] == "Spooler", services))[0]
+    assert type(services) is list
+    assert spooler["display_name"] == "Print Spooler"
+    assert spooler["username"] == "LocalSystem"
 
 
 def test_disks(agent):

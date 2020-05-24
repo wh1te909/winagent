@@ -1,4 +1,3 @@
-import PySimpleGUI as sg
 import psutil
 import json
 import requests
@@ -10,41 +9,31 @@ import validators
 import re
 import random
 import string
+from urllib.parse import urlparse
 
 from agent import db, AgentStorage
 
 
 class Installer:
-    def __init__(self):
+    def __init__(self, api_url, client_id, site_id, agent_desc, agent_type, auth_token):
+        self.api_url = api_url
+        self.client_id = client_id
+        self.site_id = site_id
+        self.agent_desc = agent_desc
+        self.agent_type = agent_type
+        self.auth_token = auth_token
         self.programdir = "C:\\Program Files\\TacticalAgent"
-        self.headers = {"content-type": "application/json"}
-        self.icon = os.path.join(self.programdir, "onit.ico")
+        self.headers = {
+            "content-type": "application/json",
+            "Authorization": f"Token {self.auth_token}",
+        }
         self.agent_hostname = socket.gethostname()
         self.version = self.get_version()
-        self.set_theme()
         self.nssm = os.path.join(self.programdir, "nssm.exe")
         self.tacticalrmm = os.path.join(self.programdir, "tacticalrmm.exe")
-        self.rmm_url = ""
-        self.auth_username = ""
-        self.auth_pw = ""
-        self.salt_master = ""
-        self.salt_id = ""
-        self.unique_id = ""
-        self.token = ""
-        self.agent_client = ""
-        self.agent_site = ""
-        self.mesh_node_id = ""
-        self.agent_desc = ""
-        self.agent_type = ""
-        self.token_headers = {}
-        self.agent_pk = 0
         self.mesh_success = True
         self.accept_success = True
         self.sync_success = True
-
-    def set_theme(self):
-        sg.SetOptions(font=("Helvetica", 12), icon=self.icon)
-        sg.ChangeLookAndFeel("Reddit")
 
     def rand_string(self):
         chars = string.ascii_letters
@@ -57,312 +46,105 @@ class Installer:
 
         return version
 
-    def pre_install(self):
-        auth_layout = [
-            [sg.Text("RMM Url:")],
-            [
-                sg.InputCombo(
-                    ["https://", "http://"],
-                    size=(6, 1),
-                    default_value="https://",
-                    readonly=True,
-                    key="protocol",
-                ),
-                sg.InputText("", key="rmmurl"),
-            ],
-            [sg.Text("Username:")],
-            [sg.InputText("", key="authusername")],
-            [sg.Text("Password:")],
-            [sg.InputText("", key="authpassword", password_char="*")],
-            [sg.Submit("Authorize", size=(40, 1))],
-        ]
-        window_auth = sg.Window(
-            "Tactical RMM Installer",
-            size=(400, 250),
-            font=("Helvetica", 12),
-            element_padding=(2, 3),
-            icon=self.icon,
-            default_element_size=(100, 23),
-            default_button_element_size=(120, 50),
-        ).Layout(auth_layout)
-
-        while True:
-            auth_event, auth_values = window_auth.Read()
-
-            if auth_event is None:
-                raise SystemExit()
-            elif auth_event == "Authorize":
-                ip_or_port = re.match(
-                    r"[0-9]+(?:\.[0-9]+){3}(:[0-9]+)?", auth_values["rmmurl"]
-                )
-                if not validators.domain(auth_values["rmmurl"]) and not ip_or_port:
-                    validation_error = (
-                        "ERROR: Please enter a valid domain name or IPv4 address\n\n"
-                    )
-                    validation_error += (
-                        "Examples:\n\n10.0.10.1\napi.example.com\n10.0.10.1:8000"
-                    )
-                    validation_error += "\n\nDo NOT put trailing slashes!\n"
-                    sg.Popup(validation_error)
-                    continue
-                if ip_or_port:
-                    ip_stripped = auth_values["rmmurl"].split(":")[0]
-                    if not validators.ipv4(ip_stripped):
-                        sg.Popup("Error parsing IP address")
-                        continue
-                    salt_master = ip_stripped
-                else:
-                    salt_master = auth_values["rmmurl"]
-
-                rmm_url = auth_values["protocol"] + auth_values["rmmurl"]
-                auth_username = auth_values["authusername"]
-                auth_pw = auth_values["authpassword"]
-                if not (rmm_url and auth_username and auth_pw):
-                    sg.Popup("All fields are required!")
-                    continue
-
-                # rmm basic auth
-                auth_url = f"{rmm_url}/api/v1/agentauth/"
-                try:
-
-                    auth_resp = requests.post(
-                        auth_url, auth=(auth_username, auth_pw), headers=self.headers
-                    )
-                except Exception:
-                    sg.Popup("Unable to contact the RMM.")
-                    continue
-                if auth_resp.status_code != 200:
-                    sg.Popup("Bad username or password")
-                    continue
-
-                # 2 factor verify
-                twofactor_token = sg.PopupGetText(
-                    "Please enter your google authenticator code",
-                    "2 factor",
-                    size=(40, 25),
-                )
-                twofactor_payload = {"twofactorToken": twofactor_token}
-                two_factor_url = f"{rmm_url}/installer/twofactor/"
-                twofactor_resp = requests.post(
-                    two_factor_url,
-                    json.dumps(twofactor_payload),
-                    auth=(auth_username, auth_pw),
-                    headers=self.headers,
-                )
-                if twofactor_resp.status_code != 200:
-                    sg.Popup(json.loads(twofactor_resp.text))
-                    continue
-                break
-
-        window_auth.Close()
-
-        # generate agent id
+    def install(self):
+        # generate the agent id
         try:
             r = subprocess.run(
                 ["wmic", "csproduct", "get", "uuid"], capture_output=True
             )
             wmic_id = r.stdout.decode().splitlines()[2].strip()
         except Exception:
-            unique_id = f"{self.rand_string()}|{self.agent_hostname}"
+            self.agent_id = f"{self.rand_string()}|{self.agent_hostname}"
         else:
-            unique_id = f"{wmic_id}|{self.agent_hostname}"
+            self.agent_id = f"{wmic_id}|{self.agent_hostname}"
 
-        try:
-            client_resp = requests.get(
-                f"{rmm_url}/clients/installer/listclients/",
-                auth=(auth_username, auth_pw),
-                headers=self.headers,
-            )
-        except Exception:
-            sg.Popup("Unable to contact the RMM. Please check your internet connection")
+        # validate the url and get the salt master
+        r = urlparse(self.api_url)
+
+        if r.scheme != "https" and r.scheme != "http":
+            print("api url must contain https or http")
+            raise SystemExit()
+
+        if validators.domain(r.netloc):
+            self.salt_master = r.netloc
+        # will match either ipv4 , or ipv4:port
+        elif re.match(r"[0-9]+(?:\.[0-9]+){3}(:[0-9]+)?", r.netloc):
+            if validators.ipv4(r.netloc):
+                self.salt_master = r.netloc
+            else:
+                self.salt_master = r.netloc.split(":")[0]
+        else:
+            print("Error parsing api url")
+            raise SystemExit()
+
+        # set the api base url
+        self.api = f"{r.scheme}://{r.netloc}"
+
+        # get the agent's token
+        url = f"{self.api}/api/v1/token/"
+        payload = {"agent_id": self.agent_id}
+        r = requests.post(url, json.dumps(payload), headers=self.headers)
+
+        if r.status_code == 401:
+            print("Token has expired. Please generate a new one from the rmm.")
+            raise SystemExit()
+        elif r.status_code != 200:
+            e = json.loads(r.text)["error"]
+            print(e)
             raise SystemExit()
         else:
-            clients_data = json.loads(client_resp.text)
-            clients = [client["client"] for client in clients_data]
+            self.agent_token = json.loads(r.text)["token"]
 
-        def get_sites(client):
-            sites_resp = requests.get(
-                f"{rmm_url}/clients/installer/{client}/sites/",
-                auth=(auth_username, auth_pw),
-                headers=self.headers,
-            )
-            sites_data = json.loads(sites_resp.text)
-            sites = [site["site"] for site in sites_data]
-            return sites
-
-        try:
-            first_client = clients[0]
-        except IndexError:
-            sg.Popup("Please first add a client in the RMM web portal")
-            raise SystemExit()
-        sites = get_sites(first_client)
-
-        description_layout = [
-            [sg.Text("Enter a Short Description:")],
-            [sg.InputText("", key="desc")],
-        ]
-
-        client_site_layout = [
-            [sg.Text("Please select a client")],
-            [
-                sg.InputCombo(
-                    clients,
-                    size=(25, 1),
-                    default_value=first_client,
-                    enable_events=True,
-                    readonly=True,
-                    key="client",
-                )
-            ],
-            [sg.Text("Please select a site")],
-            [
-                sg.InputCombo(
-                    sites,
-                    size=(25, 1),
-                    default_value=sites[0],
-                    key="site",
-                    readonly=True,
-                )
-            ],
-        ]
-
-        mon_type_layout = [
-            [
-                sg.Text(
-                    "Choose a monitoring type:",
-                    tooltip="Server or Workstation affects default alert policy",
-                )
-            ],
-            [
-                sg.Radio("Server", "RADIO1", default=True, key="server"),
-                sg.Radio("Workstation", "RADIO1", key="workstation"),
-            ],
-        ]
-
-        final_layout = [[sg.Submit("Install", size=(60, 1))]]
-
-        layout = [
-            [sg.Frame("Client", client_site_layout)],
-            [sg.Frame("Description", description_layout)],
-            [sg.Frame("Monitoring Mode", mon_type_layout)],
-            [sg.Text(f"Hostname: {self.agent_hostname}")],
-            [sg.Frame("Install", final_layout)],
-        ]
-
-        window = sg.Window(
-            "Tactical Agent Installation", size=(600, 400), icon=self.icon,
-        ).Layout(layout)
-
-        while True:
-            event, values = window.Read()
-            selected_client = values["client"]
-
-            if event is None:
-                raise SystemExit()
-            elif event == "Install":
-                agent_client = selected_client
-                agent_site = values["site"]
-                agent_desc = values["desc"]
-                if not (agent_client and agent_site and agent_desc):
-                    sg.Popup("All fields are required!")
-                    continue
-
-                break
-
-            window.FindElement("site").Update(values=get_sites(selected_client))
-
-        if values["server"]:
-            agent_type = "server"
-        else:
-            agent_type = "workstation"
-
-        window.Close()
-        # rmm get token
-        token_url = f"{rmm_url}/api/v1/token/"
-        token_payload = {"agent_id": unique_id}
-        token_resp = requests.post(
-            token_url,
-            json.dumps(token_payload),
-            auth=(auth_username, auth_pw),
-            headers=self.headers,
-        )
-
-        if token_resp.status_code != 200:
-            error = json.loads(token_resp.text)["error"]
-            sg.Popup(error)
-            raise SystemExit()
-        else:
-            token = json.loads(token_resp.text)["token"]
-
-        self.rmm_url = rmm_url
-        self.auth_username = auth_username
-        self.auth_pw = auth_pw
-        self.salt_master = salt_master
-        self.unique_id = unique_id
-        self.token = token
-        self.agent_client = agent_client
-        self.agent_site = agent_site
-        self.agent_desc = agent_desc
-        self.agent_type = agent_type
-        self.token_headers = {
-            "content-type": "application/json",
-            "Authorization": f"Token {token}",
-        }
-
-    def download_salt(self, gui_queue):
-        print("Downloading salt minion...")
-        get_minion = requests.get(
+        # download salt
+        print("Downloading salt minion")
+        r = requests.get(
             "https://github.com/wh1te909/winagent/raw/master/bin/salt-minion-setup.exe",
             stream=True,
         )
 
-        if get_minion.status_code != 200:
-            print("ERROR: Unable to download salt-minion")
-            print("Please check your internet connection")
-            gui_queue.put("installerror")
-            return False
+        if r.status_code != 200:
+            print("Unable to download salt-minion")
+            raise SystemExit()
 
-        minion_file = os.path.join(self.programdir, "salt-minion-setup.exe")
-        with open(minion_file, "wb") as mout_file:
-            for mchunk in get_minion.iter_content(chunk_size=1024):
-                if mchunk:
-                    mout_file.write(mchunk)
-
-        del get_minion
-        return True
-
-    def install_mesh(self, gui_queue):
-        print("Installing mesh agent...")
-        get_mesh_exe = requests.post(
-            f"{self.rmm_url}/api/v1/getmeshexe/",
-            auth=(self.auth_username, self.auth_pw),
-            headers=self.headers,
-            stream=True,
-        )
-
-        if get_mesh_exe.status_code != 200:
-            print("ERROR: Unable to download meshagent.exe")
-            print("Please refer to the readme for instructions on how to upload it")
-            gui_queue.put("installerror")
-            return False
-
-        mesh_file = os.path.join(self.programdir, "meshagent.exe")
-
-        with open(mesh_file, "wb") as out_file:
-            for chunk in get_mesh_exe.iter_content(chunk_size=1024):
+        minion = os.path.join(self.programdir, "salt-minion-setup.exe")
+        with open(minion, "wb") as f:
+            for chunk in r.iter_content(chunk_size=1024):
                 if chunk:
-                    out_file.write(chunk)
+                    f.write(chunk)
 
-        del get_mesh_exe
+        del r
 
-        subprocess.run([mesh_file, "-fullinstall"])
+        # install the mesh agent
+        print("Installing mesh agent")
+
+        url = f"{self.api}/api/v1/getmeshexe/"
+        r = requests.post(url, headers=self.headers, stream=True)
+
+        if r.status_code != 200:
+            print("Unable to download meshagent.")
+            print("Please refer to the readme for instructions on how to upload it.")
+            raise SystemExit()
+
+        mesh = os.path.join(self.programdir, "meshagent.exe")
+
+        with open(mesh, "wb") as f:
+            for chunk in r.iter_content(chunk_size=1024):
+                if chunk:
+                    f.write(chunk)
+
+        del r
+
+        ret = subprocess.run([mesh, "-fullinstall"], capture_output=True)
         sleep(10)
 
         mesh_attempts = 0
         while 1:
             try:
                 mesh_cmd = subprocess.run(
-                    ["C:\\Program Files\\Mesh Agent\\MeshAgent.exe", "-nodeidhex"],
+                    [
+                        "C:\\Program Files\\mesh\\Mesh Agent\\MeshAgent.exe",
+                        "-nodeidhex",
+                    ],
                     capture_output=True,
                 )
                 mesh_node_id = mesh_cmd.stdout.decode().strip()
@@ -384,87 +166,68 @@ class Installer:
                 break
 
         self.mesh_node_id = mesh_node_id
-        return True
 
-    def add_to_dashboard(self, gui_queue):
-        print("Adding agent to dashboard...")
-        add_payload = {
-            "agent_id": self.unique_id,
+        # add the agent to the dashboard
+        print("Adding agent to dashboard")
+
+        url = f"{self.api}/api/v1/add/"
+        payload = {
+            "agent_id": self.agent_id,
             "hostname": self.agent_hostname,
-            "client": self.agent_client,
-            "site": self.agent_site,
+            "client": self.client_id,
+            "site": self.site_id,
             "mesh_node_id": self.mesh_node_id,
             "description": self.agent_desc,
             "monitoring_type": self.agent_type,
         }
+        r = requests.post(url, json.dumps(payload), headers=self.headers)
 
-        add_url = f"{self.rmm_url}/api/v1/add/"
-        add_resp = requests.post(
-            add_url, json.dumps(add_payload), headers=self.token_headers
-        )
+        if r.status_code != 200:
+            print("Error adding agent to dashboard")
+            raise SystemExit()
 
-        if add_resp.status_code != 200:
-            print("ERROR: Agent not able to contact the rmm")
-            gui_queue.put("installerror")
-            return False
-
-        agent_pk = add_resp.json()["pk"]
-        self.agent_pk = agent_pk
+        self.agent_pk = r.json()["pk"]
         self.salt_id = f"{self.agent_hostname}-{self.agent_pk}"
 
         try:
             with db:
                 db.create_tables([AgentStorage])
                 AgentStorage(
-                    server=self.rmm_url,
-                    agentid=self.unique_id,
-                    client=self.agent_client,
-                    site=self.agent_site,
-                    agent_type=self.agent_type,
-                    description=self.agent_desc,
+                    server=self.api,
+                    agentid=self.agent_id,
                     mesh_node_id=self.mesh_node_id,
-                    token=self.token,
+                    token=self.agent_token,
                     version=self.version,
                     agentpk=self.agent_pk,
                     salt_master=self.salt_master,
                     salt_id=self.salt_id,
                 ).save()
         except Exception as e:
-            print(f"ERROR: {e}")
-            gui_queue.put("installerror")
-            return False
+            print(f"Error creating database: {e}")
+            raise SystemExit()
 
-        return True
+        # install salt
+        print("Installing salt")
 
-    def install_salt(self):
-        print("Installing salt...")
-        subprocess.run(
-            [
-                os.path.join(self.programdir, "salt-minion-setup.exe"),
-                "/S",
-                "/custom-config=saltcustom",
-                f"/master={self.salt_master}",
-                f"/minion-name={self.agent_hostname}-{self.agent_pk}",
-                "/start-minion=1",
-            ],
-            shell=True,
-        )
+        salt_cmd = [
+            "salt-minion-setup.exe",
+            "/S",
+            "/custom-config=saltcustom",
+            f"/master={self.salt_master}",
+            f"/minion-name={self.salt_id}",
+            "/start-minion=1",
+        ]
+        install_salt = subprocess.run(salt_cmd, cwd=self.programdir, shell=True)
+        sleep(15)  # wait for salt to register on the master
 
-        print("Waiting for salt to register on the master...")
-        sleep(30)
-
-        salt_accept_url = f"{self.rmm_url}/api/v1/acceptsaltkey/"
-        accept_payload = {"saltid": f"{self.agent_hostname}-{self.agent_pk}"}
+        # accept the salt key on the master
+        url = f"{self.api}/api/v1/acceptsaltkey/"
+        payload = {"saltid": self.salt_id}
         accept_attempts = 0
 
-        # make sure the salt minion is accepted on the master
-        # if not, warn that must manually accept the salt-key
-        print("Performing first time setup tasks...")
         while 1:
-            salt_accept_resp = requests.post(
-                salt_accept_url, json.dumps(accept_payload), headers=self.token_headers,
-            )
-            if salt_accept_resp.status_code != 200:
+            r = requests.post(url, json.dumps(payload), headers=self.headers)
+            if r.status_code != 200:
                 accept_attempts += 1
                 sleep(5)
             else:
@@ -477,18 +240,17 @@ class Installer:
                     self.accept_success = False
                     break
 
-        sleep(20)  # wait for salt to start
+        sleep(15)  # wait for salt to start
 
-        # make sure we sync modules before starting services
-        sync_modules_url = f"{self.rmm_url}/api/v1/firstinstall/"
-        sync_payload = {"pk": self.agent_pk}
+        # sync our custom salt modules
+        url = f"{self.api}/api/v1/firstinstall/"
+        payload = {"pk": self.agent_pk}
         sync_attempts = 0
 
         while 1:
-            sync_modules = requests.post(
-                sync_modules_url, json.dumps(sync_payload), headers=self.token_headers,
-            )
-            if sync_modules.status_code != 200:
+            r = requests.post(url, json.dumps(payload), headers=self.headers)
+
+            if r.status_code != 200:
                 sync_attempts += 1
                 sleep(5)
             else:
@@ -501,12 +263,10 @@ class Installer:
                     self.sync_success = False
                     break
 
-        print("Syncing modules...")
-        sleep(30)  # wait a bit for modules to fully sync
-        return True
+        sleep(10)  # wait a bit for modules to fully sync
 
-    def install_services(self):
-        print("Installing services...")
+        # install the windows services
+        print("Installing agent windows services")
 
         # winagent
         subprocess.run(
@@ -523,13 +283,7 @@ class Installer:
             [self.nssm, "set", "tacticalagent", "DisplayName", r"Tactical RMM Agent"]
         )
         subprocess.run(
-            [
-                self.nssm,
-                "set",
-                "tacticalagent",
-                "Description",
-                r"Tactical RMM Monitoring Agent",
-            ]
+            [self.nssm, "set", "tacticalagent", "Description", r"Tactical RMM Agent",]
         )
         subprocess.run([self.nssm, "start", "tacticalagent"])
 
@@ -550,7 +304,7 @@ class Installer:
                 "set",
                 "checkrunner",
                 "DisplayName",
-                r"Tactical Agent Check Runner",
+                r"Tactical RMM Check Runner",
             ]
         )
         subprocess.run(
@@ -559,18 +313,16 @@ class Installer:
                 "set",
                 "checkrunner",
                 "Description",
-                r"Tactical Agent Background Check Runner",
+                r"Tactical RMM Check Runner",
             ]
         )
         subprocess.run([self.nssm, "start", "checkrunner"])
 
-        return True
-
-    def finish(self):
+        # finish up
         if not self.accept_success:
-            print("The RMM was unable to accept the salt minion")
+            print("The RMM was unable to accept the salt minion.")
             print("Run the following command on the rmm:")
-            print(f"sudo salt-key -y -a '{self.agent_hostname}-{self.agent_pk}'")
+            print(f"sudo salt-key -y -a '{self.salt_id}'")
 
         if not self.sync_success:
             print("Unable to sync salt modules.")
@@ -581,48 +333,6 @@ class Installer:
             print("Some features will not work.")
 
         if self.accept_success and self.sync_success and self.mesh_success:
-            print("Installation was successfull!")
+            print("Installation was successfull.")
         else:
-            print("Installation finished with errors")
-
-    def install_all(self, gui_queue):
-        # lol
-        if self.download_salt(gui_queue):
-            if self.install_mesh(gui_queue):
-                if self.add_to_dashboard(gui_queue):
-                    if self.install_salt():
-                        if self.install_services():
-                            self.finish()
-                            gui_queue.put("installfinished")
-
-
-class AgentGUI:
-    def __init__(self):
-        self.icon = os.path.join(os.getcwd(), "onit.ico")
-        self.set_theme()
-
-    def set_theme(self):
-        sg.SetOptions(font=("Helvetica", 12), icon=self.icon)
-        sg.ChangeLookAndFeel("Reddit")
-
-    def show_status(self):
-        agent_status = psutil.win_service_get("tacticalagent").status()
-        salt_status = psutil.win_service_get("salt-minion").status()
-        check_status = psutil.win_service_get("checkrunner").status()
-
-        status_layout = [
-            [sg.Text("Agent status: "), sg.Text(agent_status)],
-            [sg.Text("Salt minion status: "), sg.Text(salt_status)],
-            [sg.Text("Checkrunner status: "), sg.Text(check_status)],
-        ]
-
-        window_status = sg.Window(
-            "Tactical RMM", size=(300, 150), icon=self.icon,
-        ).Layout(status_layout)
-
-        while True:
-            event, values = window_status.Read()
-
-            if event is None:
-                window_status.Close()
-                raise SystemExit()
+            print("Installation finished with errors.")

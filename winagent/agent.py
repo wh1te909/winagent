@@ -32,10 +32,6 @@ db = peewee.SqliteDatabase("C:\\Program Files\\TacticalAgent\\agentdb.db")
 class AgentStorage(peewee.Model):
     server = peewee.CharField()
     agentid = peewee.CharField()
-    client = peewee.CharField()
-    site = peewee.CharField()
-    agent_type = peewee.CharField()
-    description = peewee.CharField()
     mesh_node_id = peewee.CharField()
     token = peewee.CharField()
     version = peewee.CharField()
@@ -445,7 +441,7 @@ class WindowsAgent:
             return status
         except:
             return "failing"
-    
+
     async def event_log_check(self, data):
         try:
             log = []
@@ -458,9 +454,11 @@ class WindowsAgent:
 
             if api_search_last_days != 0:
                 start_time = dt.datetime.now() - dt.timedelta(days=api_search_last_days)
-            
 
-            flags = win32evtlog.EVENTLOG_BACKWARDS_READ | win32evtlog.EVENTLOG_SEQUENTIAL_READ
+            flags = (
+                win32evtlog.EVENTLOG_BACKWARDS_READ
+                | win32evtlog.EVENTLOG_SEQUENTIAL_READ
+            )
 
             status_dict = {
                 win32con.EVENTLOG_AUDIT_FAILURE: "AUDIT_FAILURE",
@@ -486,7 +484,7 @@ class WindowsAgent:
                     if uid >= total:
                         done = True
                         break
-                    
+
                     the_time = ev_obj.TimeGenerated.Format()
                     time_obj = dt.datetime.strptime(the_time, "%c")
 
@@ -521,10 +519,10 @@ class WindowsAgent:
 
                     if int(evt_id) == api_event_id and evt_type == api_event_type:
                         log.append(event_dict)
-                
+
                 if done:
                     break
-            
+
             win32evtlog.CloseEventLog(hand)
 
             if api_fail_when == "contains":
@@ -534,7 +532,7 @@ class WindowsAgent:
                 else:
                     status = "passing"
                     more_info = {"log": []}
-            
+
             elif api_fail_when == "not_contains":
                 if log:
                     status = "passing"
@@ -545,7 +543,7 @@ class WindowsAgent:
             else:
                 status = "failing"
                 more_info = {"log": []}
-            
+
             payload = {
                 "id": data["id"],
                 "check_type": data["check_type"],
@@ -777,3 +775,124 @@ class WindowsAgent:
             os.system('rmdir /S /Q "{}"'.format("C:\\salt"))
         except Exception:
             pass
+
+
+def show_agent_status(window, gui):
+    import win32api, win32con, win32gui, win32ui, win32ts
+    import os
+
+    class AgentStatus:
+        def __init__(self, agent_status, salt_status, check_status, mesh_status):
+            self.agent_status = agent_status
+            self.salt_status = salt_status
+            self.check_status = check_status
+            self.mesh_status = mesh_status
+            self.icon = os.path.join(os.getcwd(), "onit.ico")
+            win32gui.InitCommonControls()
+            self.hinst = win32api.GetModuleHandle(None)
+            className = "AgentStatus"
+            message_map = {
+                win32con.WM_DESTROY: self.OnDestroy,
+            }
+            wc = win32gui.WNDCLASS()
+            wc.style = win32con.CS_HREDRAW | win32con.CS_VREDRAW
+            try:
+                wc.hIcon = win32gui.LoadImage(
+                    self.hinst,
+                    self.icon,
+                    win32con.IMAGE_ICON,
+                    0,
+                    0,
+                    win32con.LR_LOADFROMFILE,
+                )
+            except Exception:
+                pass
+            wc.lpfnWndProc = message_map
+            wc.lpszClassName = className
+            win32gui.RegisterClass(wc)
+            style = win32con.WS_OVERLAPPEDWINDOW
+            self.hwnd = win32gui.CreateWindow(
+                className,
+                "Tactical RMM",
+                style,
+                win32con.CW_USEDEFAULT,
+                win32con.CW_USEDEFAULT,
+                400,
+                300,
+                0,
+                0,
+                self.hinst,
+                None,
+            )
+
+            win32gui.ShowWindow(self.hwnd, win32con.SW_SHOW)
+
+            hDC, paintStruct = win32gui.BeginPaint(self.hwnd)
+            rect = win32gui.GetClientRect(self.hwnd)
+            win32gui.DrawText(
+                hDC,
+                f"Agent: {self.agent_status}",
+                -1,
+                (0, 0, 384, 201),
+                win32con.DT_SINGLELINE | win32con.DT_CENTER | win32con.DT_VCENTER,
+            )
+
+            win32gui.DrawText(
+                hDC,
+                f"Check Runner: {self.check_status}",
+                -1,
+                (0, 0, 384, 241),
+                win32con.DT_SINGLELINE | win32con.DT_CENTER | win32con.DT_VCENTER,
+            )
+            win32gui.DrawText(
+                hDC,
+                f"Salt Minion: {self.salt_status}",
+                -1,
+                (0, 0, 384, 281),
+                win32con.DT_SINGLELINE | win32con.DT_CENTER | win32con.DT_VCENTER,
+            )
+            win32gui.DrawText(
+                hDC,
+                f"Mesh Agent: {self.mesh_status}",
+                -1,
+                (0, 0, 384, 321),
+                win32con.DT_SINGLELINE | win32con.DT_CENTER | win32con.DT_VCENTER,
+            )
+
+            win32gui.EndPaint(self.hwnd, paintStruct)
+            win32gui.UpdateWindow(self.hwnd)
+
+        def OnDestroy(self, hwnd, message, wparam, lparam):
+            win32gui.PostQuitMessage(0)
+            return True
+
+    try:
+        agent_status = psutil.win_service_get("tacticalagent").status()
+    except psutil.NoSuchProcess:
+        agent_status = "Not Installed"
+
+    try:
+        salt_status = psutil.win_service_get("salt-minion").status()
+    except psutil.NoSuchProcess:
+        salt_status = "Not Installed"
+
+    try:
+        check_status = psutil.win_service_get("checkrunner").status()
+    except psutil.NoSuchProcess:
+        check_status = "Not Installed"
+
+    try:
+        mesh_status = psutil.win_service_get("Mesh Agent").status()
+    except psutil.NoSuchProcess:
+        mesh_status = "Not Installed"
+
+    if gui:
+        win32gui.ShowWindow(window, win32con.SW_HIDE)
+        w = AgentStatus(agent_status, salt_status, check_status, mesh_status)
+        win32gui.PumpMessages()
+        win32gui.CloseWindow(window)
+    else:
+        print("Agent: ", agent_status)
+        print("Check Runner: ", check_status)
+        print("Salt Minion: ", salt_status)
+        print("Mesh Agent: ", mesh_status)
