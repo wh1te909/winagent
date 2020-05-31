@@ -11,7 +11,7 @@ class TaskRunner(WindowsAgent):
     def __init__(self, task_pk):
         super().__init__()
         self.task_pk = task_pk
-        self.task_url = f"{self.astor.server}/tasks/taskrunner/{self.task_pk}/"
+        self.task_url = f"{self.astor.server}/api/v1/{self.task_pk}/taskrunner/"
 
     def run(self):
         # called manually and not from within a check
@@ -31,7 +31,7 @@ class TaskRunner(WindowsAgent):
 
     def get_task(self):
         try:
-            resp = requests.get(self.task_url, headers=self.headers, timeout=15,)
+            resp = requests.get(self.task_url, headers=self.headers, timeout=15)
         except:
             return False
         else:
