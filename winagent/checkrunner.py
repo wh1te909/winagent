@@ -9,23 +9,19 @@ from agent import WindowsAgent
 class CheckRunner(WindowsAgent):
     def __init__(self):
         super().__init__()
-        self.checkrunner_url = f"{self.astor.server}/checks/checkrunner/"
+        self.checkrunner_url = (
+            f"{self.astor.server}/api/v1/{self.astor.agentpk}/checkrunner/"
+        )
 
     def get_checks(self):
         try:
-            payload = {"agent_id": self.astor.agentid}
-            resp = requests.get(
-                self.checkrunner_url,
-                data=json.dumps(payload),
-                headers=self.headers,
-                timeout=15,
-            )
+            resp = requests.get(self.checkrunner_url, headers=self.headers, timeout=15,)
         except:
             return False
         else:
             try:
                 data = resp.json()
-                if data["checks"]["total"] > 0:
+                if data["checks"]:
                     return data
                 else:
                     return False
@@ -34,52 +30,33 @@ class CheckRunner(WindowsAgent):
 
     async def run_checks(self, data):
         try:
-            diskchecks = data["diskchecks"]
-            cpuloadchecks = data["cpuloadchecks"]
-            memchecks = data["memchecks"]
-            winservicechecks = data["winservicechecks"]
-            pingchecks = data["pingchecks"]
-            scriptchecks = data["scriptchecks"]
-            eventlogchecks = data["eventlogchecks"]
             tasks = []
+            checks = data["checks"]
 
-            if cpuloadchecks:
-                checks = [_ for _ in cpuloadchecks]
-                for check in checks:
+            for check in checks:
+
+                if check["check_type"] == "cpuload":
                     tasks.append(self.cpu_load_check(check))
 
-            if pingchecks:
-                checks = [_ for _ in pingchecks]
-                for check in checks:
+                elif check["check_type"] == "ping":
                     tasks.append(self.ping_check(check))
 
-            if scriptchecks:
-                checks = [_ for _ in scriptchecks]
-                for check in checks:
+                elif check["check_type"] == "script":
                     tasks.append(self.script_check(check))
 
-            if diskchecks:
-                checks = [_ for _ in diskchecks]
-                for check in checks:
+                elif check["check_type"] == "diskspace":
                     tasks.append(self.disk_check(check))
 
-            if memchecks:
-                checks = [_ for _ in memchecks]
-                for check in checks:
+                elif check["check_type"] == "memory":
                     tasks.append(self.mem_check(check))
 
-            if winservicechecks:
-                checks = [_ for _ in winservicechecks]
-                for check in checks:
+                elif check["check_type"] == "winsvc":
                     tasks.append(self.win_service_check(check))
-            
-            if eventlogchecks:
-                checks = [_ for _ in eventlogchecks]
-                for check in checks:
+
+                elif check["check_type"] == "eventlog":
                     tasks.append(self.event_log_check(check))
 
-            if tasks:
-                await asyncio.gather(*tasks)
+            await asyncio.gather(*tasks)
 
         except Exception as e:
             self.logger.error(f"Error running checks: {e}")

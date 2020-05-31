@@ -164,7 +164,6 @@ class WindowsAgent:
         self.salt_minion_exe = (
             "https://github.com/wh1te909/winagent/raw/master/bin/salt-minion-setup.exe"
         )
-        self.check_results_url = f"{self.astor.server}/checks/checkresults/"
 
     async def script_check(self, data):
 
@@ -237,22 +236,24 @@ class WindowsAgent:
                 "stderr": stderr,
                 "status": status,
                 "retcode": retcode,
-                "id": data["id"],
-                "check_type": data["check_type"],
                 "execution_time": "{:.4f}".format(round(stop - start)),
             }
 
             resp = requests.patch(
-                self.check_results_url,
+                f"{self.astor.server}/api/v1/{data['id']}/checkrunner/",
                 json.dumps(payload),
                 headers=self.headers,
                 timeout=15,
             )
 
-            if status == "failing" and data["task_on_failure"]:
+            if (
+                status == "failing"
+                and data["assigned_task"]
+                and data["assigned_task"]["enabled"]
+            ):
                 from taskrunner import TaskRunner
 
-                task = TaskRunner(task_pk=data["task_on_failure"])
+                task = TaskRunner(task_pk=data["assigned_task"]["id"])
                 await task.run_while_in_event_loop()
 
             return status
@@ -282,23 +283,25 @@ class WindowsAgent:
                 output = stderr.decode("utf-8", errors="ignore")
 
             payload = {
-                "id": data["id"],
                 "status": status,
                 "more_info": output,
-                "check_type": data["check_type"],
             }
 
             resp = requests.patch(
-                self.check_results_url,
+                f"{self.astor.server}/api/v1/{data['id']}/checkrunner/",
                 json.dumps(payload),
                 headers=self.headers,
                 timeout=15,
             )
 
-            if status == "failing" and data["task_on_failure"]:
+            if (
+                status == "failing"
+                and data["assigned_task"]
+                and data["assigned_task"]["enabled"]
+            ):
                 from taskrunner import TaskRunner
 
-                task = TaskRunner(task_pk=data["task_on_failure"])
+                task = TaskRunner(task_pk=data["assigned_task"]["id"])
                 await task.run_while_in_event_loop()
 
             return status
@@ -324,22 +327,25 @@ class WindowsAgent:
         more_info = f"Total: {total}B, Free: {free}B"
 
         payload = {
-            "id": data["id"],
-            "check_type": data["check_type"],
             "status": status,
             "more_info": more_info,
         }
+
         resp = requests.patch(
-            self.check_results_url,
+            f"{self.astor.server}/api/v1/{data['id']}/checkrunner/",
             json.dumps(payload),
             headers=self.headers,
             timeout=15,
         )
 
-        if status == "failing" and data["task_on_failure"]:
+        if (
+            status == "failing"
+            and data["assigned_task"]
+            and data["assigned_task"]["enabled"]
+        ):
             from taskrunner import TaskRunner
 
-            task = TaskRunner(task_pk=data["task_on_failure"])
+            task = TaskRunner(task_pk=data["assigned_task"]["id"])
             await task.run_while_in_event_loop()
 
         return status
@@ -350,36 +356,31 @@ class WindowsAgent:
             await asyncio.sleep(5)
             cpu_load = round(psutil.cpu_percent(interval=0))
 
-            payload = {
-                "id": data["id"],
-                "check_type": data["check_type"],
-                "cpu_load": cpu_load,
-            }
+            payload = {"percent": cpu_load}
+
             resp = requests.patch(
-                self.check_results_url,
+                f"{self.astor.server}/api/v1/{data['id']}/checkrunner/",
                 json.dumps(payload),
                 headers=self.headers,
                 timeout=15,
             )
+
             return "ok"
         except:
             return False
 
     async def mem_check(self, data):
         try:
-            used_ram = self.get_used_ram()
 
-            payload = {
-                "id": data["id"],
-                "check_type": data["check_type"],
-                "used_ram": used_ram,
-            }
+            payload = {"percent": self.get_used_ram()}
+
             resp = requests.patch(
-                self.check_results_url,
+                f"{self.astor.server}/api/v1/{data['id']}/checkrunner/",
                 json.dumps(payload),
                 headers=self.headers,
                 timeout=15,
             )
+
             return "ok"
         except:
             return False
@@ -421,22 +422,25 @@ class WindowsAgent:
                     service_status = stat
 
             payload = {
-                "id": data["id"],
-                "check_type": data["check_type"],
                 "status": status,
                 "more_info": f"Status {service_status.upper()}",
             }
+
             resp = requests.patch(
-                self.check_results_url,
+                f"{self.astor.server}/api/v1/{data['id']}/checkrunner/",
                 json.dumps(payload),
                 headers=self.headers,
                 timeout=15,
             )
 
-            if status == "failing" and data["task_on_failure"]:
+            if (
+                status == "failing"
+                and data["assigned_task"]
+                and data["assigned_task"]["enabled"]
+            ):
                 from taskrunner import TaskRunner
 
-                task = TaskRunner(task_pk=data["task_on_failure"])
+                task = TaskRunner(task_pk=data["assigned_task"]["id"])
                 await task.run_while_in_event_loop()
 
             return status
@@ -546,22 +550,25 @@ class WindowsAgent:
                 more_info = {"log": []}
 
             payload = {
-                "id": data["id"],
-                "check_type": data["check_type"],
                 "status": status,
-                "more_info": more_info,
+                "extra_details": more_info,
             }
+
             resp = requests.patch(
-                self.check_results_url,
+                f"{self.astor.server}/api/v1/{data['id']}/checkrunner/",
                 json.dumps(payload),
                 headers=self.headers,
                 timeout=15,
             )
 
-            if status == "failing" and data["task_on_failure"]:
+            if (
+                status == "failing"
+                and data["assigned_task"]
+                and data["assigned_task"]["enabled"]
+            ):
                 from taskrunner import TaskRunner
 
-                task = TaskRunner(task_pk=data["task_on_failure"])
+                task = TaskRunner(task_pk=data["assigned_task"]["id"])
                 await task.run_while_in_event_loop()
 
             return status
