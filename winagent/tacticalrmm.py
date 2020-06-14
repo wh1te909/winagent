@@ -96,6 +96,12 @@ if __name__ == "__main__":
         agent = WindowsAgent()
         agent.fix_salt()
     
+    elif args.mode == "fixmesh":
+        from agent import WindowsAgent
+
+        agent = WindowsAgent()
+        agent.fix_mesh()
+    
     elif args.mode == "cleanup":
         from agent import WindowsAgent
 

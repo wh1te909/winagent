@@ -270,6 +270,13 @@ class Installer:
 
         sleep(10)  # wait a bit for modules to fully sync
 
+        # create the scheduled tasks
+        from agent import WindowsAgent
+
+        agent = WindowsAgent()
+        agent.create_fix_salt_task()
+        agent.create_fix_mesh_task()
+
         # install the windows services
         print("Installing agent windows services")
 
