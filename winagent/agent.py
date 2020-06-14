@@ -150,6 +150,7 @@ class WindowsAgent:
         self.platform = platform.system().lower()
         self.astor = self.get_db()
         self.programdir = "C:\\Program Files\\TacticalAgent"
+        self.exe = os.path.join(self.programdir, "tacticalrmm.exe")
         self.salt_call = "C:\\salt\\salt-call.bat"
         self.headers = {
             "content-type": "application/json",
@@ -705,10 +706,11 @@ class WindowsAgent:
 
     def salt_call_ret_bool(self, cmd, args=None, timeout=30):
         try:
+            command = [self.salt_call, cmd, "--local", f"--timeout={timeout}"]
+
             if args:
-                command = [self.salt_call, cmd, args, "--local", f"--timeout={timeout}"]
-            else:
-                command = [self.salt_call, cmd, "--local", f"--timeout={timeout}"]
+                # extend list at 3rd position
+                command[2:2] = args
 
             r = subprocess.run(command, capture_output=True, timeout=timeout)
         except Exception:
@@ -771,18 +773,15 @@ class WindowsAgent:
         return True
 
     def cleanup(self):
-        payload = {"agent_id": self.astor.agentid}
+        self.cleanup_tasks()
 
-        url = f"{self.astor.server}/api/v1/deleteagent/"
-        requests.post(url, json.dumps(payload), headers=self.headers)
-        sleep(1)
-
-        try:
-            shutil.rmtree("C:\\salt")
-            sleep(1)
-            os.system('rmdir /S /Q "{}"'.format("C:\\salt"))
-        except Exception:
-            pass
+        if os.path.exists("C:\\salt"):
+            try:
+                shutil.rmtree("C:\\salt")
+                sleep(1)
+                os.system('rmdir /S /Q "{}"'.format("C:\\salt"))
+            except Exception:
+                pass
 
     def fix_salt(self, by_time=True):
         """
@@ -848,10 +847,117 @@ class WindowsAgent:
                 except Exception:
                     pass
 
+    def _mesh_service_action(self, action):
+        if action == "stop":
+            r = subprocess.run(
+                ["sc", "stop", "mesh agent"], capture_output=True, timeout=30
+            )
+        elif action == "start":
+            r = subprocess.run(
+                ["sc", "start", "mesh agent"], capture_output=True, timeout=30
+            )
+
+    def fix_mesh(self):
+        """
+        Mesh agent will randomly bug out and kill cpu usage
+        This functions runs every hour as a scheduled task to solve that
+        """
+        mesh = [
+            proc.info
+            for proc in psutil.process_iter(attrs=["pid", "name"])
+            if "meshagent" in proc.info["name"].lower()
+        ]
+
+        if mesh:
+            try:
+                proc = psutil.Process(mesh[0]["pid"])
+            except psutil.NoSuchProcess:
+                try:
+                    self._mesh_service_action("stop")
+                    sleep(3)
+                    self._mesh_service_action("start")
+                finally:
+                    return
+
+            cpu_usage = proc.cpu_percent(10)
+
+            if cpu_usage >= 20.0:
+
+                self._mesh_service_action("stop")
+
+                attempts = 0
+                while 1:
+                    svc = psutil.win_service_get("mesh agent")
+                    if svc.status() != "stopped":
+                        attempts += 1
+                        sleep(1)
+                    else:
+                        attempts = 0
+
+                    if attempts == 0 or attempts >= 30:
+                        break
+
+                self._mesh_service_action("start")
+
+    def create_fix_salt_task(self):
+
+        start_obj = dt.datetime.now() + dt.timedelta(minutes=5)
+        start_time = dt.datetime.strftime(start_obj, "%H:%M")
+
+        cmd = [
+            "name=TacticalRMM_fixsalt",
+            "force=True",
+            "action_type=Execute",
+            f'cmd="{self.exe}"',
+            "arguments='-m fixsalt'",
+            "trigger_type=Daily",
+            f"start_time='{start_time}'",
+            "repeat_interval='1 hour'",
+            "ac_only=False",
+            "stop_if_on_batteries=False",
+        ]
+
+        return self.salt_call_ret_bool("task.create_task", args=cmd)
+
+    def create_fix_mesh_task(self):
+        
+        start_obj = dt.datetime.now() + dt.timedelta(minutes=7)
+        start_time = dt.datetime.strftime(start_obj, "%H:%M")
+
+        cmd = [
+            "name=TacticalRMM_fixmesh",
+            "force=True",
+            "action_type=Execute",
+            f'cmd="{self.exe}"',
+            "arguments='-m fixmesh'",
+            "trigger_type=Daily",
+            f"start_time='{start_time}'",
+            "repeat_interval='1 hour'",
+            "ac_only=False",
+            "stop_if_on_batteries=False",
+        ]
+
+        return self.salt_call_ret_bool("task.create_task", args=cmd)
+
+    def cleanup_tasks(self):
+        r = subprocess.run(
+            [self.salt_call, "task.list_tasks", "--local"], capture_output=True
+        )
+
+        ret = json.loads(r.stdout.decode("utf-8", "ignore"))["local"]
+
+        tasks = [task for task in ret if task.startswith("TacticalRMM_")]
+
+        if tasks:
+            for task in tasks:
+                try:
+                    self.salt_call_ret_bool("task.delete_task", args=[task])
+                except:
+                    pass
+
 
 def show_agent_status(window, gui):
     import win32api, win32con, win32gui, win32ui, win32ts
-    import os
 
     class AgentStatus:
         def __init__(self, agent_status, salt_status, check_status, mesh_status):
