@@ -309,23 +309,27 @@ class WindowsAgent:
         except:
             return "failing"
 
-    async def disk_check(self, data):
+    async def disk_check(self, data, exists=True):
         try:
             disk = psutil.disk_usage(data["disk"])
         except Exception:
+            exists = False
             self.logger.error(f"Disk {data['disk']} does not exist")
-            return "failing"
 
-        percent_used = round(disk.percent)
-        total = bytes2human(disk.total)
-        free = bytes2human(disk.free)
+        if exists:
+            percent_used = round(disk.percent)
+            total = bytes2human(disk.total)
+            free = bytes2human(disk.free)
 
-        if (100 - percent_used) < data["threshold"]:
-            status = "failing"
+            if (100 - percent_used) < data["threshold"]:
+                status = "failing"
+            else:
+                status = "passing"
+
+            more_info = f"Total: {total}B, Free: {free}B"
         else:
-            status = "passing"
-
-        more_info = f"Total: {total}B, Free: {free}B"
+            status = "failing"
+            more_info = f"Disk {data['disk']} does not exist"
 
         payload = {
             "status": status,
@@ -386,45 +390,59 @@ class WindowsAgent:
         except:
             return False
 
-    async def win_service_check(self, data):
+    async def win_service_check(self, data, exists=True):
         try:
             services = self.get_services()
-            service = list(filter(lambda x: x["name"] == data["svc_name"], services))[0]
 
-            service_status = service["status"]
+            try:
+                service = list(
+                    filter(lambda x: x["name"] == data["svc_name"], services)
+                )[0]
+            except IndexError:
+                exists = False
+                self.logger.error(f"Service {data['svc_name']} does not exist")
 
-            if service_status == "running":
-                status = "passing"
+            if exists:
+                service_status = service["status"]
 
-            elif service_status == "start_pending" and data["pass_if_start_pending"]:
-                status = "passing"
+                if service_status == "running":
+                    status = "passing"
 
+                elif (
+                    service_status == "start_pending" and data["pass_if_start_pending"]
+                ):
+                    status = "passing"
+
+                else:
+                    status = "failing"
+
+                    if data["restart_if_stopped"]:
+                        ret = self.salt_call_ret_bool(
+                            cmd="service.restart", args=[data["svc_name"]], timeout=60,
+                        )
+                        # wait a bit to give service time to start before checking status again
+                        await asyncio.sleep(10)
+                        reloaded = self.get_services()
+                        stat = list(
+                            filter(lambda x: x["name"] == data["svc_name"], reloaded)
+                        )[0]["status"]
+
+                        if stat == "running":
+                            status = "passing"
+                        elif stat == "start_pending" and data["pass_if_start_pending"]:
+                            status = "passing"
+                        else:
+                            status = "failing"
+
+                        service_status = stat
             else:
                 status = "failing"
 
-                if data["restart_if_stopped"]:
-                    ret = self.salt_call_ret_bool(
-                        cmd="service.restart", args=data["svc_name"], timeout=60,
-                    )
-                    # wait a bit to give service time to start before checking status again
-                    await asyncio.sleep(10)
-                    reloaded = self.get_services()
-                    stat = list(
-                        filter(lambda x: x["name"] == data["svc_name"], reloaded)
-                    )[0]["status"]
-
-                    if stat == "running":
-                        status = "passing"
-                    elif stat == "start_pending" and data["pass_if_start_pending"]:
-                        status = "passing"
-                    else:
-                        status = "failing"
-
-                    service_status = stat
-
             payload = {
                 "status": status,
-                "more_info": f"Status {service_status.upper()}",
+                "more_info": f"Status {service_status.upper()}"
+                if exists
+                else f"Service {data['svc_name']} does not exist",
             }
 
             resp = requests.patch(
@@ -704,7 +722,8 @@ class WindowsAgent:
         else:
             return "n/a"
 
-    def salt_call_ret_bool(self, cmd, args=None, timeout=30):
+    def salt_call_ret_bool(self, cmd, args=[], timeout=30):
+        assert isinstance(args, list)
         try:
             command = [self.salt_call, cmd, "--local", f"--timeout={timeout}"]
 
@@ -920,7 +939,7 @@ class WindowsAgent:
         return self.salt_call_ret_bool("task.create_task", args=cmd)
 
     def create_fix_mesh_task(self):
-        
+
         start_obj = dt.datetime.now() + dt.timedelta(minutes=7)
         start_time = dt.datetime.strftime(start_obj, "%H:%M")
 
