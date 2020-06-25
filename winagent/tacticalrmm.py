@@ -2,7 +2,7 @@ import os
 import argparse
 
 
-if __name__ == "__main__":
+def main():
 
     parser = argparse.ArgumentParser(description="Tactical RMM Agent")
     parser.add_argument("-m", action="store", dest="mode", type=str)
@@ -95,13 +95,13 @@ if __name__ == "__main__":
 
         agent = WindowsAgent()
         agent.fix_salt()
-    
+
     elif args.mode == "fixmesh":
         from agent import WindowsAgent
 
         agent = WindowsAgent()
         agent.fix_mesh()
-    
+
     elif args.mode == "cleanup":
         from agent import WindowsAgent
 
@@ -120,3 +120,7 @@ if __name__ == "__main__":
             show_agent_status(window=None, gui=False)
         else:
             show_agent_status(window=window, gui=True)
+
+
+if __name__ == "__main__":
+    main()
