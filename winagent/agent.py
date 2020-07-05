@@ -898,9 +898,9 @@ class WindowsAgent:
                 finally:
                     return
 
-            cpu_usage = proc.cpu_percent(10)
+            cpu_usage = proc.cpu_percent(10) / psutil.cpu_count()
 
-            if cpu_usage >= 20.0:
+            if cpu_usage >= 15.0:
 
                 self._mesh_service_action("stop")
 
