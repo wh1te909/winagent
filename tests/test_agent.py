@@ -1,16 +1,19 @@
-import sys
 import os
-import validators
+import sys
+from unittest import mock
+
 import pytest
-import unittest.mock as mock
+import validators
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+sys.path.append(
+    os.path.abspath(os.path.join(os.path.dirname(__file__), "..\\winagent"))
+)
 
-from winagent.agent import WindowsAgent
+from agent import WindowsAgent
 
 
 @pytest.fixture(scope="session", autouse=True)
-@mock.patch("winagent.agent.WindowsAgent.__init__", return_value=None)
+@mock.patch("agent.WindowsAgent.__init__", return_value=None)
 def agent(self):
     return WindowsAgent()
 

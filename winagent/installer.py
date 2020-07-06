@@ -1,17 +1,18 @@
-import psutil
 import json
-import requests
-import subprocess
 import os
-from time import sleep
-import socket
-import validators
-import re
 import random
+import re
+import socket
 import string
+import subprocess
+from time import sleep
 from urllib.parse import urlparse
 
-from agent import db, AgentStorage
+import psutil
+import requests
+import validators
+
+from agent import AgentStorage, db
 
 
 class Installer:
@@ -28,7 +29,6 @@ class Installer:
             "Authorization": f"Token {self.auth_token}",
         }
         self.agent_hostname = socket.gethostname()
-        self.version = self.get_version()
         self.nssm = os.path.join(self.programdir, "nssm.exe")
         self.tacticalrmm = os.path.join(self.programdir, "tacticalrmm.exe")
         self.mesh_success = True
@@ -38,13 +38,6 @@ class Installer:
     def rand_string(self):
         chars = string.ascii_letters
         return "".join(random.choice(chars) for i in range(35))
-
-    def get_version(self):
-        version_file = os.path.join(self.programdir, "VERSION")
-        with open(version_file, "r") as vf:
-            version = vf.read()
-
-        return version
 
     def install(self):
         # generate the agent id
@@ -202,7 +195,6 @@ class Installer:
                     agentid=self.agent_id,
                     mesh_node_id=self.mesh_node_id,
                     token=self.agent_token,
-                    version=self.version,
                     agentpk=self.agent_pk,
                     salt_master=self.salt_master,
                     salt_id=self.salt_id,

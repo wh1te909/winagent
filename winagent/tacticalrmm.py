@@ -1,5 +1,5 @@
-import os
 import argparse
+import os
 
 
 def main():
@@ -111,6 +111,7 @@ def main():
 
     else:
         import win32gui
+
         from agent import show_agent_status
 
         window = win32gui.GetForegroundWindow()

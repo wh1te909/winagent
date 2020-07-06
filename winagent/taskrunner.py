@@ -1,8 +1,9 @@
-import json
-import requests
-import subprocess
 import asyncio
+import json
+import subprocess
 from time import perf_counter
+
+import requests
 
 from agent import WindowsAgent
 

@@ -1,5 +1,6 @@
-import subprocess
 import json
+import subprocess
+
 import requests
 
 from agent import WindowsAgent
