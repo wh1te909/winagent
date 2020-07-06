@@ -1,7 +1,8 @@
-import json
-import requests
-from time import sleep
 import asyncio
+import json
+from time import sleep
+
+import requests
 
 from agent import WindowsAgent
 

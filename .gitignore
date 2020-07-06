@@ -8,3 +8,5 @@ build
 dist
 *.spec
 checkrunner.txt
+*.log
+run.py

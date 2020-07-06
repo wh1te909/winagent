@@ -1,7 +1,8 @@
 import json
-import requests
-from time import sleep
 from random import randrange
+from time import sleep
+
+import requests
 
 from agent import WindowsAgent
 
@@ -24,7 +25,7 @@ class WinAgentSvc(WindowsAgent):
                 "total_ram": self.get_total_ram(),
                 "plat": self.platform,
                 "plat_release": self.get_platform_release(),
-                "version": self.astor.version,
+                "version": self.version,
                 "antivirus": self.get_av(),
                 "boot_time": self.get_boot_time(),
             }
