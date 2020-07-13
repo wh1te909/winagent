@@ -142,7 +142,7 @@ class Installer:
         if mesh_exists:
             print("Found existing Mesh Agent. Removing...")
             try:
-                subprocess.run(["sc", "stop", "mesh agent"], timeout=30)
+                subprocess.run(["sc", "stop", "mesh agent"], capture_output=True, timeout=30)
                 sleep(5)
             except:
                 pass
