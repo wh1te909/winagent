@@ -27,6 +27,7 @@ from utils import (
     bytes2human,
     get_os_version_info,
     get_windows_os_release_grain,
+    kill_proc,
 )
 
 db = peewee.SqliteDatabase("C:\\Program Files\\TacticalAgent\\agentdb.db")
@@ -766,26 +767,14 @@ class WindowsAgent:
                 if pid == this_proc:
                     # don't kill myself
                     continue
-                try:
-                    parent = psutil.Process(pid)
-                    children = parent.children(recursive=True)
-                    children.append(parent)
-                    for p in children:
-                        p.send_signal(signal.SIGTERM)
 
-                    gone, alive = psutil.wait_procs(children, timeout=10, callback=None)
-                except Exception:
-                    pass
+                self.logger.warning(f"Killing salt pid: {pid}")
+                kill_proc(pid)
 
     def _mesh_service_action(self, action):
-        if action == "stop":
-            r = subprocess.run(
-                ["sc", "stop", "mesh agent"], capture_output=True, timeout=30
-            )
-        elif action == "start":
-            r = subprocess.run(
-                ["sc", "start", "mesh agent"], capture_output=True, timeout=30
-            )
+        r = subprocess.run(
+            ["sc", action, "mesh agent"], capture_output=True, timeout=30
+        )
 
     def fix_mesh(self):
         """
@@ -811,8 +800,10 @@ class WindowsAgent:
 
             cpu_usage = proc.cpu_percent(10) / psutil.cpu_count()
 
-            if cpu_usage >= 15.0:
-
+            if cpu_usage >= 18.0:
+                self.logger.warning(
+                    f"Mesh agent cpu usage: {cpu_usage}%. Restarting..."
+                )
                 self._mesh_service_action("stop")
 
                 attempts = 0
@@ -826,6 +817,23 @@ class WindowsAgent:
 
                     if attempts == 0 or attempts >= 30:
                         break
+
+                # sometimes stopping service doesn't kill the hung proc
+                mesh2 = [
+                    proc.info
+                    for proc in psutil.process_iter(attrs=["pid", "name"])
+                    if "meshagent" in proc.info["name"].lower()
+                ]
+
+                if mesh2:
+                    pids = []
+                    for proc in mesh2:
+                        pids.append(proc["pid"])
+
+                    for pid in pids:
+                        kill_proc(pid)
+
+                    sleep(1)
 
                 self._mesh_service_action("start")
 

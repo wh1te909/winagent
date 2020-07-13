@@ -2,6 +2,7 @@ import json
 import os
 import random
 import re
+import shutil
 import socket
 import string
 import subprocess
@@ -13,6 +14,7 @@ import requests
 import validators
 
 from agent import AgentStorage, db
+from utils import kill_proc
 
 
 class Installer:
@@ -107,9 +109,7 @@ class Installer:
 
         del r
 
-        # install the mesh agent
-        print("Installing mesh agent")
-
+        # download mesh agent
         url = f"{self.api}/api/v1/getmeshexe/"
         r = requests.post(url, headers=self.headers, stream=True)
 
@@ -127,12 +127,61 @@ class Installer:
 
         del r
 
+        # check for existing mesh installations and remove
+        mesh_exists = False
+        mesh_one_dir = "C:\\Program Files\\Mesh Agent"
+        mesh_two_dir = "C:\\Program Files\\mesh\\Mesh Agent"
+
+        if os.path.exists(mesh_one_dir):
+            mesh_exists = True
+            mesh_cleanup_dir = mesh_one_dir
+        elif os.path.exists(mesh_two_dir):
+            mesh_exists = True
+            mesh_cleanup_dir = mesh_two_dir
+
+        if mesh_exists:
+            print("Found existing Mesh Agent. Removing...")
+            try:
+                subprocess.run(["sc", "stop", "mesh agent"], capture_output=True, timeout=30)
+                sleep(5)
+            except:
+                pass
+
+            mesh_pids = []
+            mesh_procs = [
+                p.info
+                for p in psutil.process_iter(attrs=["pid", "name"])
+                if "meshagent" in p.info["name"].lower()
+            ]
+
+            if mesh_procs:
+                for proc in mesh_procs:
+                    mesh_pids.append(proc["pid"])
+
+            if mesh_pids:
+                for pid in mesh_pids:
+                    kill_proc(pid)
+
+            r = subprocess.run(
+                [mesh, "-fulluninstall"], capture_output=True, timeout=60
+            )
+
+            if os.path.exists(mesh_cleanup_dir):
+                try:
+                    shutil.rmtree(mesh_cleanup_dir)
+                    sleep(1)
+                    os.system('rmdir /S /Q "{}"'.format(mesh_cleanup_dir))
+                except:
+                    pass
+
+        # install the mesh agent
+        print("Installing mesh agent")
         ret = subprocess.run([mesh, "-fullinstall"], capture_output=True)
         sleep(10)
 
         # meshcentral changed their installation path recently
-        mesh_one = os.path.join("C:\\Program Files\\Mesh Agent", "MeshAgent.exe")
-        mesh_two = os.path.join("C:\\Program Files\\mesh\\Mesh Agent", "MeshAgent.exe")
+        mesh_one = os.path.join(mesh_one_dir, "MeshAgent.exe")
+        mesh_two = os.path.join(mesh_two_dir, "MeshAgent.exe")
 
         if os.path.exists(mesh_one):
             mesh_exe = mesh_one
@@ -269,9 +318,26 @@ class Installer:
         agent.create_fix_salt_task()
         agent.create_fix_mesh_task()
 
-        # install the windows services
-        print("Installing agent windows services")
+        # remove services if they exists
+        try:
+            tac = psutil.win_service_get("tacticalagent")
+        except psutil.NoSuchProcess:
+            pass
+        else:
+            print("Found tacticalagent service. Removing...")
+            subprocess.run([self.nssm, "stop", "tacticalagent"])
+            subprocess.run([self.nssm, "remove", "tacticalagent", "confirm"])
 
+        try:
+            chk = psutil.win_service_get("checkrunner")
+        except psutil.NoSuchProcess:
+            pass
+        else:
+            print("Found checkrunner service. Removing...")
+            subprocess.run([self.nssm, "stop", "checkrunner"])
+            subprocess.run([self.nssm, "remove", "checkrunner", "confirm"])
+
+        # install the windows services
         # winagent
         subprocess.run(
             [

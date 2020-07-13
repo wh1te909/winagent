@@ -1,10 +1,25 @@
 import ctypes
 import re
+import signal
 from ctypes.wintypes import BYTE, DWORD, WCHAR, WORD
 
+import psutil
 import wmi
 
 kernel32 = ctypes.WinDLL(str("kernel32"), use_last_error=True)
+
+
+def kill_proc(pid):
+    try:
+        parent = psutil.Process(pid)
+        children = parent.children(recursive=True)
+        children.append(parent)
+        for p in children:
+            p.send_signal(signal.SIGTERM)
+
+        gone, alive = psutil.wait_procs(children, timeout=20, callback=None)
+    except:
+        pass
 
 
 def bytes2human(n):
