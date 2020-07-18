@@ -47,6 +47,7 @@ class WinAgentSvc(WindowsAgent):
                     "used_ram": self.get_used_ram(),
                     "disks": self.get_disks(),
                     "logged_in_username": self.get_logged_on_user(),
+                    "boot_time": self.get_boot_time(),
                 }
 
                 r = requests.patch(
@@ -58,4 +59,4 @@ class WinAgentSvc(WindowsAgent):
             except:
                 pass
             finally:
-                sleep(randrange(start=15, stop=30))
+                sleep(randrange(start=30, stop=120))
