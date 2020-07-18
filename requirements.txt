@@ -6,12 +6,12 @@ future==0.18.2
 idna==2.10
 peewee==3.13.3
 pefile==2019.4.18
-psutil==5.7.0
+psutil==5.7.2
 git+git://github.com/pyinstaller/pyinstaller@develop
 pywin32==228
 pywin32-ctypes==0.2.0
 requests==2.24.0
 six==1.15.0
 urllib3==1.25.9
-validators==0.15.0
+validators==0.16.0
 WMI==1.5.1
