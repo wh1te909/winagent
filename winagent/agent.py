@@ -53,6 +53,7 @@ class WindowsAgent:
         self.astor = self.get_db()
         self.programdir = "C:\\Program Files\\TacticalAgent"
         self.exe = os.path.join(self.programdir, "tacticalrmm.exe")
+        self.nssm = os.path.join(self.programdir, "nssm.exe")
         self.salt_call = "C:\\salt\\salt-call.bat"
         self.headers = {
             "content-type": "application/json",
@@ -656,52 +657,92 @@ class WindowsAgent:
             except:
                 return False
 
-    def update_salt(self):
-        self.logger.info("Updating salt")
-
-        get_minion = requests.get(self.salt_minion_exe, stream=True,)
-        if get_minion.status_code != 200:
-            self.logger.error("Unable to download salt-minion. Aborting")
+    def get_salt_version(self):
+        cmd = [self.salt_call, "pkg.list_pkgs", "--local", "--timeout=45"]
+        try:
+            r = subprocess.run(cmd, capture_output=True, timeout=50)
+            ret = json.loads(r.stdout.decode("utf-8", errors="ignore"))
+            ver = [
+                (k, v) for k, v in ret["local"].items() if "salt minion" in k.lower()
+            ][0][1]
+        except:
             return False
+        else:
+            return ver
 
-        minion_file = os.path.join(self.programdir, "salt-minion-setup.exe")
-        if os.path.exists(minion_file):
-            os.remove(minion_file)
+    def update_salt(self):
+        try:
+            salt_info = f"{self.astor.server}/api/v1/{self.astor.agentpk}/saltinfo/"
+            r = requests.get(salt_info, headers=self.headers, timeout=15)
+            if r.status_code != 200:
+                return
 
-        sleep(1)
-        with open(minion_file, "wb") as f:
-            for chunk in get_minion.iter_content(chunk_size=1024):
-                if chunk:
-                    f.write(chunk)
+            try:
+                current_ver = r.json()["currentVer"]
+                latest_ver = r.json()["latestVer"]
+                salt_id = r.json()["salt_id"]
+            except Exception:
+                return
 
-        del get_minion
+            installed_ver = self.get_salt_version()
+            if not isinstance(installed_ver, str):
+                self.logger.error("Unable to get installed salt version. Aborting")
+                return
 
-        p_stop = subprocess.run(
-            ["sc", "stop", "checkrunner"], capture_output=True, timeout=60
-        )
+            if latest_ver == installed_ver:
+                return
 
-        r = subprocess.run(
-            [
-                "salt-minion-setup.exe",
-                "/S",
-                "/custom-config=saltcustom",
-                f"/master={self.astor.salt_master}",
-                f"/minion-name={self.astor.salt_id}",
-                "/start-minion=1",
-            ],
-            cwd=self.programdir,
-            capture_output=True,
-            timeout=600,
-        )
+            self.logger.info("Updating salt")
 
-        sleep(10)
+            get_minion = requests.get(self.salt_minion_exe, stream=True, timeout=900)
+            if get_minion.status_code != 200:
+                self.logger.error("Unable to download salt-minion. Aborting")
+                return False
 
-        p_start = subprocess.run(
-            ["sc", "start", "checkrunner"], capture_output=True, timeout=60
-        )
+            minion_file = os.path.join(self.programdir, "salt-minion-setup.exe")
+            if os.path.exists(minion_file):
+                os.remove(minion_file)
 
-        self.logger.info(f"Salt was updated, return code: {r.returncode}")
-        return True
+            sleep(1)
+            with open(minion_file, "wb") as f:
+                for chunk in get_minion.iter_content(chunk_size=1024):
+                    if chunk:
+                        f.write(chunk)
+
+            del get_minion
+
+            p_stop = subprocess.run(
+                [self.nssm, "stop", "checkrunner"], capture_output=True, timeout=60
+            )
+
+            r = subprocess.run(
+                [
+                    "salt-minion-setup.exe",
+                    "/S",
+                    "/custom-config=saltcustom",
+                    f"/master={self.astor.salt_master}",
+                    f"/minion-name={salt_id}",
+                    "/start-minion=1",
+                ],
+                cwd=self.programdir,
+                capture_output=True,
+                shell=True,
+                timeout=30,
+            )
+            sleep(60)
+
+            p_start = subprocess.run(
+                [self.nssm, "start", "checkrunner"], capture_output=True, timeout=60
+            )
+
+            payload = {"ver": latest_ver}
+            r = requests.patch(
+                salt_info, json.dumps(payload), headers=self.headers, timeout=30
+            )
+
+            self.logger.info(f"Salt was updated from {installed_ver} to {latest_ver}")
+        except Exception as e:
+            self.logger.error(e)
 
     def cleanup(self):
         self.cleanup_tasks()
