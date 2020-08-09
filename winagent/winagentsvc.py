@@ -33,7 +33,7 @@ class WinAgentSvc(WindowsAgent):
             salt_ver = self.get_salt_version()
             if isinstance(salt_ver, str):
                 info["salt_ver"] = salt_ver
-            
+
             r = requests.patch(
                 self.update_url, json.dumps(info), headers=self.headers, timeout=30
             )
