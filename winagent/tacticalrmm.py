@@ -1,5 +1,8 @@
 import argparse
 import os
+import socket
+import sys
+import threading
 
 
 def main():
@@ -11,7 +14,11 @@ def main():
     parser.add_argument("--client-id", action="store", dest="client_id", type=int)
     parser.add_argument("--site-id", action="store", dest="site_id", type=int)
     parser.add_argument(
-        "--desc", action="store", dest="agent_desc", type=str, default="changeme"
+        "--desc",
+        action="store",
+        dest="agent_desc",
+        type=str,
+        default=socket.gethostname(),
     )
     parser.add_argument(
         "--agent-type",
@@ -25,12 +32,15 @@ def main():
     args = parser.parse_args()
 
     if args.mode == "install":
-        import sys
-        import threading
 
-        if len(sys.argv) != 15:
+        if (
+            not args.api_url
+            or not args.client_id
+            or not args.site_id
+            or not args.auth_token
+        ):
             parser.print_help()
-            raise SystemExit()
+            sys.exit(1)
 
         from installer import Installer
 
