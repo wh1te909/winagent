@@ -109,6 +109,18 @@ def main():
         agent.fix_salt(by_time=False)
         agent.cleanup()
 
+    elif args.mode == "recoversalt":
+        from agent import WindowsAgent
+
+        agent = WindowsAgent()
+        agent.recover_salt()
+
+    elif args.mode == "recovermesh":
+        from agent import WindowsAgent
+
+        agent = WindowsAgent()
+        agent.recover_mesh()
+
     else:
         import win32gui
 

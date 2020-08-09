@@ -61,6 +61,16 @@ class WinAgentSvc(WindowsAgent):
                     headers=self.headers,
                     timeout=30,
                 )
+
+                if isinstance(r.json(), dict) and "recovery" in r.json().keys():
+                    if r.json()["recovery"] == "salt":
+                        self.spawn_detached_process([self.exe, "-m", "recoversalt"])
+                    elif r.json()["recovery"] == "mesh":
+                        self.spawn_detached_process([self.exe, "-m", "recovermesh"])
+                    elif r.json()["recovery"] == "command":
+                        cmd = r.json()["cmd"]
+                        self.spawn_detached_process(cmd, shell=True)
+
             except:
                 pass
             finally:

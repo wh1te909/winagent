@@ -744,6 +744,82 @@ class WindowsAgent:
         except Exception as e:
             self.logger.error(e)
 
+    def recover_salt(self):
+        try:
+            ssm = os.path.join("C:\\salt\\bin", "ssm.exe")
+            r = subprocess.run(
+                [ssm, "stop", "salt-minion"], capture_output=True, timeout=30
+            )
+            sleep(10)
+            self.fix_salt(by_time=False)
+            r = subprocess.run(
+                ["ipconfig", "/flushdns"], capture_output=True, timeout=30
+            )
+            r = subprocess.run(
+                [ssm, "start", "salt-minion"], capture_output=True, timeout=30
+            )
+        except Exception as e:
+            self.logger.error(e)
+
+    def recover_mesh(self):
+        self._mesh_service_action("stop")
+        sleep(5)
+        pids = [
+            proc.info
+            for proc in psutil.process_iter(attrs=["pid", "name"])
+            if "meshagent" in proc.info["name"].lower()
+        ]
+
+        for pid in pids:
+            kill_proc(pid["pid"])
+
+        mesh1 = os.path.join("C:\\Program Files\\Mesh Agent", "MeshAgent.exe")
+        mesh2 = os.path.join(self.programdir, "meshagent.exe")
+        if os.path.exists(mesh1):
+            exe = mesh1
+        else:
+            exe = mesh2
+
+        r = subprocess.run([exe, "-nodeidhex"], capture_output=True, timeout=30)
+        if r.returncode != 0:
+            self._mesh_service_action("start")
+            return
+
+        node_hex = r.stdout.decode().strip()
+        if "not defined" in node_hex.lower():
+            self._mesh_service_action("start")
+            return
+
+        try:
+            mesh_info = f"{self.astor.server}/api/v1/{self.astor.agentpk}/meshinfo/"
+            resp = requests.get(mesh_info, headers=self.headers, timeout=15)
+        except Exception:
+            self._mesh_service_action("start")
+            return
+
+        if resp.status_code == 200 and isinstance(resp.json(), str):
+            if node_hex != resp.json():
+                payload = {"nodeidhex": node_hex}
+                requests.patch(
+                    mesh_info, json.dumps(payload), headers=self.headers, timeout=15
+                )
+
+        self._mesh_service_action("start")
+
+    def spawn_detached_process(self, cmd, shell=False):
+        CREATE_NEW_PROCESS_GROUP = 0x00000200
+        DETACHED_PROCESS = 0x00000008
+        p = subprocess.Popen(
+            cmd,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            close_fds=True,
+            shell=shell,
+            creationflags=DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP,
+        )
+        return p.pid
+
     def cleanup(self):
         self.cleanup_tasks()
 
