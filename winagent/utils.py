@@ -1,7 +1,10 @@
 import ctypes
 import re
 import signal
+import subprocess
+import winreg
 from ctypes.wintypes import BYTE, DWORD, WCHAR, WORD
+
 
 import psutil
 import wmi
@@ -20,6 +23,56 @@ def kill_proc(pid):
         gone, alive = psutil.wait_procs(children, timeout=20, callback=None)
     except:
         pass
+
+
+def enable_rdp():
+    with winreg.CreateKeyEx(
+        winreg.HKEY_LOCAL_MACHINE,
+        "SYSTEM\\CurrentControlSet\\Control\\Terminal Server",
+        0,
+        winreg.KEY_ALL_ACCESS,
+    ) as key:
+        winreg.SetValueEx(key, "fDenyTSConnections", 0, winreg.REG_DWORD, 0)
+
+    subprocess.run(
+        'netsh advfirewall firewall set rule group="remote desktop" new enable=Yes',
+        capture_output=True,
+        shell=True,
+        timeout=15,
+    )
+
+
+def disable_sleep_hibernate():
+    with winreg.CreateKeyEx(
+        winreg.HKEY_LOCAL_MACHINE,
+        "SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Power",
+        0,
+        winreg.KEY_ALL_ACCESS,
+    ) as key:
+        winreg.SetValueEx(key, "HiberbootEnabled", 0, winreg.REG_DWORD, 0)
+
+    commands = [
+        lambda x: f"powercfg /set{x}valueindex scheme_current sub_buttons lidaction 0",
+        lambda x: f"powercfg /x -standby-timeout-{x} 0",
+        lambda x: f"powercfg /x -hibernate-timeout-{x} 0",
+        lambda x: f"powercfg /x -disk-timeout-{x} 0",
+        lambda x: f"powercfg /x -monitor-timeout-{x} 0",
+        lambda x: f"powercfg /x -standby-timeout-{x} 0",
+    ]
+
+    for x in ["ac", "dc"]:
+        for i in commands:
+            subprocess.run(i(x), capture_output=True, shell=True)
+
+    subprocess.run("powercfg -S SCHEME_CURRENT", capture_output=True, shell=True)
+
+
+def enable_ping():
+    subprocess.run(
+        'netsh advfirewall firewall add rule name="ICMP Allow incoming V4 echo request" protocol=icmpv4:8,any dir=in action=allow',
+        capture_output=True,
+        shell=True,
+    )
 
 
 def bytes2human(n):

@@ -28,6 +28,15 @@ def main():
         default="server",
         choices=["server", "workstation"],
     )
+    parser.add_argument(
+        "--power", action="store", dest="power", type=int, default=0, choices=[0, 1],
+    )
+    parser.add_argument(
+        "--rdp", action="store", dest="rdp", type=int, default=0, choices=[0, 1],
+    )
+    parser.add_argument(
+        "--ping", action="store", dest="ping", type=int, default=0, choices=[0, 1],
+    )
     parser.add_argument("--auth", action="store", dest="auth_token", type=str)
     args = parser.parse_args()
 
@@ -50,6 +59,9 @@ def main():
             site_id=args.site_id,
             agent_desc=args.agent_desc,
             agent_type=args.agent_type,
+            power=args.power,
+            rdp=args.rdp,
+            ping=args.ping,
             auth_token=args.auth_token,
         )
 
