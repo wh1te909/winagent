@@ -53,6 +53,7 @@ class WindowsAgent:
         self.astor = self.get_db()
         self.programdir = "C:\\Program Files\\TacticalAgent"
         self.exe = os.path.join(self.programdir, "tacticalrmm.exe")
+        self.nssm = os.path.join(self.programdir, "nssm.exe")
         self.salt_call = "C:\\salt\\salt-call.bat"
         self.headers = {
             "content-type": "application/json",
@@ -656,52 +657,168 @@ class WindowsAgent:
             except:
                 return False
 
-    def update_salt(self):
-        self.logger.info("Updating salt")
-
-        get_minion = requests.get(self.salt_minion_exe, stream=True,)
-        if get_minion.status_code != 200:
-            self.logger.error("Unable to download salt-minion. Aborting")
+    def get_salt_version(self):
+        cmd = [self.salt_call, "pkg.list_pkgs", "--local", "--timeout=45"]
+        try:
+            r = subprocess.run(cmd, capture_output=True, timeout=50)
+            ret = json.loads(r.stdout.decode("utf-8", errors="ignore"))
+            ver = [
+                (k, v) for k, v in ret["local"].items() if "salt minion" in k.lower()
+            ][0][1]
+        except:
             return False
+        else:
+            return ver
 
-        minion_file = os.path.join(self.programdir, "salt-minion-setup.exe")
-        if os.path.exists(minion_file):
-            os.remove(minion_file)
+    def update_salt(self):
+        try:
+            salt_info = f"{self.astor.server}/api/v1/{self.astor.agentpk}/saltinfo/"
+            r = requests.get(salt_info, headers=self.headers, timeout=15)
+            if r.status_code != 200:
+                return
 
-        sleep(1)
-        with open(minion_file, "wb") as f:
-            for chunk in get_minion.iter_content(chunk_size=1024):
-                if chunk:
-                    f.write(chunk)
+            try:
+                current_ver = r.json()["currentVer"]
+                latest_ver = r.json()["latestVer"]
+                salt_id = r.json()["salt_id"]
+            except Exception:
+                return
 
-        del get_minion
+            installed_ver = self.get_salt_version()
+            if not isinstance(installed_ver, str):
+                self.logger.error("Unable to get installed salt version. Aborting")
+                return
 
-        p_stop = subprocess.run(
-            ["sc", "stop", "checkrunner"], capture_output=True, timeout=60
+            if latest_ver == installed_ver:
+                return
+
+            self.logger.info("Updating salt")
+
+            get_minion = requests.get(self.salt_minion_exe, stream=True, timeout=900)
+            if get_minion.status_code != 200:
+                self.logger.error("Unable to download salt-minion. Aborting")
+                return False
+
+            minion_file = os.path.join(self.programdir, "salt-minion-setup.exe")
+            if os.path.exists(minion_file):
+                os.remove(minion_file)
+
+            sleep(1)
+            with open(minion_file, "wb") as f:
+                for chunk in get_minion.iter_content(chunk_size=1024):
+                    if chunk:
+                        f.write(chunk)
+
+            del get_minion
+
+            p_stop = subprocess.run(
+                [self.nssm, "stop", "checkrunner"], capture_output=True, timeout=60
+            )
+
+            r = subprocess.run(
+                [
+                    "salt-minion-setup.exe",
+                    "/S",
+                    "/custom-config=saltcustom",
+                    f"/master={self.astor.salt_master}",
+                    f"/minion-name={salt_id}",
+                    "/start-minion=1",
+                ],
+                cwd=self.programdir,
+                capture_output=True,
+                shell=True,
+                timeout=30,
+            )
+            sleep(60)
+
+            p_start = subprocess.run(
+                [self.nssm, "start", "checkrunner"], capture_output=True, timeout=60
+            )
+
+            payload = {"ver": latest_ver}
+            r = requests.patch(
+                salt_info, json.dumps(payload), headers=self.headers, timeout=30
+            )
+
+            self.logger.info(f"Salt was updated from {installed_ver} to {latest_ver}")
+        except Exception as e:
+            self.logger.error(e)
+
+    def recover_salt(self):
+        try:
+            ssm = os.path.join("C:\\salt\\bin", "ssm.exe")
+            r = subprocess.run(
+                [ssm, "stop", "salt-minion"], capture_output=True, timeout=30
+            )
+            sleep(10)
+            self.fix_salt(by_time=False)
+            r = subprocess.run(
+                ["ipconfig", "/flushdns"], capture_output=True, timeout=30
+            )
+            r = subprocess.run(
+                [ssm, "start", "salt-minion"], capture_output=True, timeout=30
+            )
+        except Exception as e:
+            self.logger.error(e)
+
+    def recover_mesh(self):
+        self._mesh_service_action("stop")
+        sleep(5)
+        pids = [
+            proc.info
+            for proc in psutil.process_iter(attrs=["pid", "name"])
+            if "meshagent" in proc.info["name"].lower()
+        ]
+
+        for pid in pids:
+            kill_proc(pid["pid"])
+
+        mesh1 = os.path.join("C:\\Program Files\\Mesh Agent", "MeshAgent.exe")
+        mesh2 = os.path.join(self.programdir, "meshagent.exe")
+        if os.path.exists(mesh1):
+            exe = mesh1
+        else:
+            exe = mesh2
+
+        r = subprocess.run([exe, "-nodeidhex"], capture_output=True, timeout=30)
+        if r.returncode != 0:
+            self._mesh_service_action("start")
+            return
+
+        node_hex = r.stdout.decode().strip()
+        if "not defined" in node_hex.lower():
+            self._mesh_service_action("start")
+            return
+
+        try:
+            mesh_info = f"{self.astor.server}/api/v1/{self.astor.agentpk}/meshinfo/"
+            resp = requests.get(mesh_info, headers=self.headers, timeout=15)
+        except Exception:
+            self._mesh_service_action("start")
+            return
+
+        if resp.status_code == 200 and isinstance(resp.json(), str):
+            if node_hex != resp.json():
+                payload = {"nodeidhex": node_hex}
+                requests.patch(
+                    mesh_info, json.dumps(payload), headers=self.headers, timeout=15
+                )
+
+        self._mesh_service_action("start")
+
+    def spawn_detached_process(self, cmd, shell=False):
+        CREATE_NEW_PROCESS_GROUP = 0x00000200
+        DETACHED_PROCESS = 0x00000008
+        p = subprocess.Popen(
+            cmd,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            close_fds=True,
+            shell=shell,
+            creationflags=DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP,
         )
-
-        r = subprocess.run(
-            [
-                "salt-minion-setup.exe",
-                "/S",
-                "/custom-config=saltcustom",
-                f"/master={self.astor.salt_master}",
-                f"/minion-name={self.astor.salt_id}",
-                "/start-minion=1",
-            ],
-            cwd=self.programdir,
-            capture_output=True,
-            timeout=600,
-        )
-
-        sleep(10)
-
-        p_start = subprocess.run(
-            ["sc", "start", "checkrunner"], capture_output=True, timeout=60
-        )
-
-        self.logger.info(f"Salt was updated, return code: {r.returncode}")
-        return True
+        return p.pid
 
     def cleanup(self):
         self.cleanup_tasks()

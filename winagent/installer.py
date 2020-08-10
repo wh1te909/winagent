@@ -14,16 +14,30 @@ import requests
 import validators
 
 from agent import AgentStorage, db
-from utils import kill_proc
+from utils import kill_proc, disable_sleep_hibernate, enable_ping, enable_rdp
 
 
 class Installer:
-    def __init__(self, api_url, client_id, site_id, agent_desc, agent_type, auth_token):
+    def __init__(
+        self,
+        api_url,
+        client_id,
+        site_id,
+        agent_desc,
+        agent_type,
+        power,
+        rdp,
+        ping,
+        auth_token,
+    ):
         self.api_url = api_url
         self.client_id = client_id
         self.site_id = site_id
         self.agent_desc = agent_desc
         self.agent_type = agent_type
+        self.disable_power = power
+        self.enable_rdp = rdp
+        self.enable_ping = ping
         self.auth_token = auth_token
         self.programdir = "C:\\Program Files\\TacticalAgent"
         self.headers = {
@@ -78,7 +92,15 @@ class Installer:
         # get the agent's token
         url = f"{self.api}/api/v1/token/"
         payload = {"agent_id": self.agent_id}
-        r = requests.post(url, json.dumps(payload), headers=self.headers)
+        try:
+            r = requests.post(
+                url, json.dumps(payload), headers=self.headers, timeout=15
+            )
+        except Exception:
+            print(
+                "ERROR: Unable to contact the RMM. Please check your internet connection."
+            )
+            raise SystemExit()
 
         if r.status_code == 401:
             print("Token has expired. Please generate a new one from the rmm.")
@@ -142,7 +164,9 @@ class Installer:
         if mesh_exists:
             print("Found existing Mesh Agent. Removing...")
             try:
-                subprocess.run(["sc", "stop", "mesh agent"], capture_output=True, timeout=30)
+                subprocess.run(
+                    ["sc", "stop", "mesh agent"], capture_output=True, timeout=30
+                )
                 sleep(5)
             except:
                 pass
@@ -325,8 +349,10 @@ class Installer:
             pass
         else:
             print("Found tacticalagent service. Removing...")
-            subprocess.run([self.nssm, "stop", "tacticalagent"])
-            subprocess.run([self.nssm, "remove", "tacticalagent", "confirm"])
+            subprocess.run([self.nssm, "stop", "tacticalagent"], capture_output=True)
+            subprocess.run(
+                [self.nssm, "remove", "tacticalagent", "confirm"], capture_output=True
+            )
 
         try:
             chk = psutil.win_service_get("checkrunner")
@@ -334,12 +360,14 @@ class Installer:
             pass
         else:
             print("Found checkrunner service. Removing...")
-            subprocess.run([self.nssm, "stop", "checkrunner"])
-            subprocess.run([self.nssm, "remove", "checkrunner", "confirm"])
+            subprocess.run([self.nssm, "stop", "checkrunner"], capture_output=True)
+            subprocess.run(
+                [self.nssm, "remove", "checkrunner", "confirm"], capture_output=True
+            )
 
         # install the windows services
-        # winagent
-        subprocess.run(
+        print("Installing services...")
+        svc_commands = [
             [
                 self.nssm,
                 "install",
@@ -347,18 +375,10 @@ class Installer:
                 self.tacticalrmm,
                 "-m",
                 "winagentsvc",
-            ]
-        )
-        subprocess.run(
-            [self.nssm, "set", "tacticalagent", "DisplayName", r"Tactical RMM Agent"]
-        )
-        subprocess.run(
-            [self.nssm, "set", "tacticalagent", "Description", r"Tactical RMM Agent",]
-        )
-        subprocess.run([self.nssm, "start", "tacticalagent"])
-
-        # checkrunner
-        subprocess.run(
+            ],
+            [self.nssm, "set", "tacticalagent", "DisplayName", r"Tactical RMM Agent"],
+            [self.nssm, "set", "tacticalagent", "Description", r"Tactical RMM Agent"],
+            [self.nssm, "start", "tacticalagent"],
             [
                 self.nssm,
                 "install",
@@ -366,27 +386,47 @@ class Installer:
                 self.tacticalrmm,
                 "-m",
                 "checkrunner",
-            ]
-        )
-        subprocess.run(
+            ],
             [
                 self.nssm,
                 "set",
                 "checkrunner",
                 "DisplayName",
                 r"Tactical RMM Check Runner",
-            ]
-        )
-        subprocess.run(
+            ],
             [
                 self.nssm,
                 "set",
                 "checkrunner",
                 "Description",
                 r"Tactical RMM Check Runner",
-            ]
-        )
-        subprocess.run([self.nssm, "start", "checkrunner"])
+            ],
+            [self.nssm, "start", "checkrunner"],
+        ]
+
+        for cmd in svc_commands:
+            subprocess.run(cmd, capture_output=True)
+
+        if self.disable_power:
+            print("Disabling sleep/hibernate...")
+            try:
+                disable_sleep_hibernate()
+            except:
+                pass
+
+        if self.enable_rdp:
+            print("Enabling RDP...")
+            try:
+                enable_rdp()
+            except:
+                pass
+
+        if self.enable_ping:
+            print("Enabling ping...")
+            try:
+                enable_ping()
+            except:
+                pass
 
         # finish up
         if not self.accept_success:

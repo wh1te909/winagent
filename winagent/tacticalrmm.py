@@ -1,5 +1,8 @@
 import argparse
 import os
+import socket
+import sys
+import threading
 
 
 def main():
@@ -11,7 +14,11 @@ def main():
     parser.add_argument("--client-id", action="store", dest="client_id", type=int)
     parser.add_argument("--site-id", action="store", dest="site_id", type=int)
     parser.add_argument(
-        "--desc", action="store", dest="agent_desc", type=str, default="changeme"
+        "--desc",
+        action="store",
+        dest="agent_desc",
+        type=str,
+        default=socket.gethostname(),
     )
     parser.add_argument(
         "--agent-type",
@@ -21,16 +28,28 @@ def main():
         default="server",
         choices=["server", "workstation"],
     )
+    parser.add_argument(
+        "--power", action="store", dest="power", type=int, default=0, choices=[0, 1],
+    )
+    parser.add_argument(
+        "--rdp", action="store", dest="rdp", type=int, default=0, choices=[0, 1],
+    )
+    parser.add_argument(
+        "--ping", action="store", dest="ping", type=int, default=0, choices=[0, 1],
+    )
     parser.add_argument("--auth", action="store", dest="auth_token", type=str)
     args = parser.parse_args()
 
     if args.mode == "install":
-        import sys
-        import threading
 
-        if len(sys.argv) != 15:
+        if (
+            not args.api_url
+            or not args.client_id
+            or not args.site_id
+            or not args.auth_token
+        ):
             parser.print_help()
-            raise SystemExit()
+            sys.exit(1)
 
         from installer import Installer
 
@@ -40,6 +59,9 @@ def main():
             site_id=args.site_id,
             agent_desc=args.agent_desc,
             agent_type=args.agent_type,
+            power=args.power,
+            rdp=args.rdp,
+            ping=args.ping,
             auth_token=args.auth_token,
         )
 
@@ -108,6 +130,18 @@ def main():
         agent = WindowsAgent()
         agent.fix_salt(by_time=False)
         agent.cleanup()
+
+    elif args.mode == "recoversalt":
+        from agent import WindowsAgent
+
+        agent = WindowsAgent()
+        agent.recover_salt()
+
+    elif args.mode == "recovermesh":
+        from agent import WindowsAgent
+
+        agent = WindowsAgent()
+        agent.recover_mesh()
 
     else:
         import win32gui

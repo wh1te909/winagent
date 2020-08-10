@@ -29,6 +29,11 @@ class WinAgentSvc(WindowsAgent):
                 "antivirus": self.get_av(),
                 "boot_time": self.get_boot_time(),
             }
+
+            salt_ver = self.get_salt_version()
+            if isinstance(salt_ver, str):
+                info["salt_ver"] = salt_ver
+
             r = requests.patch(
                 self.update_url, json.dumps(info), headers=self.headers, timeout=30
             )
@@ -56,6 +61,16 @@ class WinAgentSvc(WindowsAgent):
                     headers=self.headers,
                     timeout=30,
                 )
+
+                if isinstance(r.json(), dict) and "recovery" in r.json().keys():
+                    if r.json()["recovery"] == "salt":
+                        self.spawn_detached_process([self.exe, "-m", "recoversalt"])
+                    elif r.json()["recovery"] == "mesh":
+                        self.spawn_detached_process([self.exe, "-m", "recovermesh"])
+                    elif r.json()["recovery"] == "command":
+                        cmd = r.json()["cmd"]
+                        self.spawn_detached_process(cmd, shell=True)
+
             except:
                 pass
             finally:
