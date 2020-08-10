@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/python/black)
 
-#### Building (powershell, python 3.8.3)
+#### Building (powershell, python 3.8.5)
 
 Download and install [Inno Setup](http://jrsoftware.org/isinfo.php)
 
