@@ -556,9 +556,9 @@ class WindowsAgent:
             return "error getting output"
 
         if r.stdout:
-            return r.stdout.decode()
+            return r.stdout.decode("utf-8", errors="ignore")
         elif r.stderr:
-            return r.stderr.decode()
+            return r.stderr.decode("utf-8", errors="ignore")
         else:
             return "error getting output"
 
@@ -617,7 +617,7 @@ class WindowsAgent:
         )
 
         if r.stdout:
-            out = r.stdout.decode().lower().replace(" ", "").splitlines()
+            out = r.stdout.decode("utf-8", errors="ignore").lower().replace(" ", "").splitlines()
             out[:] = [i for i in out if i != ""]  # remove empty list items
 
             if len(out) == 1 and out[0] == "displayname=windowsdefender":
@@ -785,7 +785,7 @@ class WindowsAgent:
             self._mesh_service_action("start")
             return
 
-        node_hex = r.stdout.decode().strip()
+        node_hex = r.stdout.decode("utf-8", errors="ignore").strip()
         if "not defined" in node_hex.lower():
             self._mesh_service_action("start")
             return
