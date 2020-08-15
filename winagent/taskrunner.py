@@ -9,8 +9,8 @@ from agent import WindowsAgent
 
 
 class TaskRunner(WindowsAgent):
-    def __init__(self, task_pk):
-        super().__init__()
+    def __init__(self, task_pk, log_level, log_to):
+        super().__init__(log_level, log_to)
         self.task_pk = task_pk
         self.task_url = f"{self.astor.server}/api/v1/{self.task_pk}/taskrunner/"
 
@@ -33,7 +33,8 @@ class TaskRunner(WindowsAgent):
     def get_task(self):
         try:
             resp = requests.get(self.task_url, headers=self.headers, timeout=15)
-        except:
+        except Exception as e:
+            self.logger.debug(e)
             return False
         else:
             return resp.json()
@@ -43,7 +44,8 @@ class TaskRunner(WindowsAgent):
         try:
             script = data["script"]
             timeout = data["timeout"]
-        except:
+        except Exception as e:
+            self.logger.debug(e)
             return False
 
         try:
@@ -54,6 +56,13 @@ class TaskRunner(WindowsAgent):
                     script["filename"],
                     f"timeout={timeout}",
                 ]
+
+                try:
+                    script_type = script["script_type"]
+                except KeyError:
+                    pass
+                else:
+                    cmd.append(f"script_type={script_type}")
             else:
                 cmd = [
                     self.salt_call,
@@ -63,6 +72,7 @@ class TaskRunner(WindowsAgent):
                     f"timeout={timeout}",
                 ]
 
+            self.logger.debug(cmd)
             start = perf_counter()
 
             proc = await asyncio.create_subprocess_exec(
@@ -81,7 +91,7 @@ class TaskRunner(WindowsAgent):
                 except:
                     pass
 
-                self.logger.error(f"Task timed out after {timeout} seconds")
+                self.logger.debug(f"Task timed out after {timeout} seconds")
                 proc_stdout, proc_stderr = False, False
                 stdout = ""
                 stderr = f"Task timed out after {timeout} seconds"
@@ -106,12 +116,13 @@ class TaskRunner(WindowsAgent):
                 "retcode": retcode,
                 "execution_time": "{:.4f}".format(round(stop - start)),
             }
+            self.logger.debug(payload)
 
             resp = requests.patch(
                 self.task_url, json.dumps(payload), headers=self.headers, timeout=15,
             )
 
-        except:
-            pass
+        except Exception as e:
+            self.logger.debug(e)
 
         return "ok"

@@ -8,8 +8,8 @@ from agent import WindowsAgent
 
 
 class WinAgentSvc(WindowsAgent):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, log_level, log_to):
+        super().__init__(log_level, log_to)
         self.update_url = f"{self.astor.server}/api/v1/update/"
         self.hello_url = f"{self.astor.server}/api/v1/hello/"
 
@@ -34,11 +34,13 @@ class WinAgentSvc(WindowsAgent):
             if isinstance(salt_ver, str):
                 info["salt_ver"] = salt_ver
 
+            self.logger.debug(info)
+
             r = requests.patch(
                 self.update_url, json.dumps(info), headers=self.headers, timeout=30
             )
-        except:
-            pass
+        except Exception as e:
+            self.logger.debug(e)
 
         sleep(5)
 
@@ -53,7 +55,9 @@ class WinAgentSvc(WindowsAgent):
                     "disks": self.get_disks(),
                     "logged_in_username": self.get_logged_on_user(),
                     "boot_time": self.get_boot_time(),
+                    "version": self.version,
                 }
+                self.logger.debug(payload)
 
                 r = requests.patch(
                     self.hello_url,
@@ -71,7 +75,7 @@ class WinAgentSvc(WindowsAgent):
                         cmd = r.json()["cmd"]
                         self.spawn_detached_process(cmd, shell=True)
 
-            except:
-                pass
+            except Exception as e:
+                self.logger.debug(e)
             finally:
                 sleep(randrange(start=30, stop=120))

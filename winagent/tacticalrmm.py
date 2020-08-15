@@ -2,7 +2,6 @@ import argparse
 import os
 import socket
 import sys
-import threading
 
 
 def main():
@@ -29,6 +28,23 @@ def main():
         choices=["server", "workstation"],
     )
     parser.add_argument(
+        "-l",
+        "--log",
+        action="store",
+        dest="log_level",
+        type=str,
+        default="INFO",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+    )
+    parser.add_argument(
+        "--logto",
+        action="store",
+        dest="log_to",
+        type=str,
+        default="file",
+        choices=["file", "stdout"],
+    )
+    parser.add_argument(
         "--power", action="store", dest="power", type=int, default=0, choices=[0, 1],
     )
     parser.add_argument(
@@ -38,9 +54,21 @@ def main():
         "--ping", action="store", dest="ping", type=int, default=0, choices=[0, 1],
     )
     parser.add_argument("--auth", action="store", dest="auth_token", type=str)
+    parser.add_argument("--version", action="store_true")
+    parser.add_argument("--local-salt", action="store_true")
+    parser.add_argument("--local-mesh", action="store_true")
     args = parser.parse_args()
 
-    if args.mode == "install":
+    if args.version:
+        try:
+            with open(os.path.join("C:\\Program Files\\TacticalAgent", "VERSION")) as f:
+                ver = f.read().strip()
+
+            print(ver)
+        except Exception as e:
+            print(f"Error getting version: {e}")
+
+    elif args.mode == "install":
 
         if (
             not args.api_url
@@ -63,84 +91,87 @@ def main():
             rdp=args.rdp,
             ping=args.ping,
             auth_token=args.auth_token,
+            log_level=args.log_level,
+            local_salt=args.local_salt,
+            local_mesh=args.local_mesh,
         )
 
-        t = threading.Thread(target=installer.install, daemon=True)
-        t.start()
-        t.join()
+        installer.install()
 
     elif args.mode == "winagentsvc":
         from winagentsvc import WinAgentSvc
 
-        agent = WinAgentSvc()
+        agent = WinAgentSvc(log_level=args.log_level, log_to=args.log_to)
         agent.run()
 
     elif args.mode == "checkrunner":
         from checkrunner import CheckRunner
 
-        agent = CheckRunner()
+        agent = CheckRunner(log_level=args.log_level, log_to=args.log_to)
         agent.run_forever()
 
     elif args.mode == "runchecks":
         from checkrunner import CheckRunner
 
-        agent = CheckRunner()
+        agent = CheckRunner(log_level=args.log_level, log_to=args.log_to)
         agent.run()
 
     elif args.mode == "winupdater":
         from winupdater import WinUpdater
 
-        agent = WinUpdater()
+        agent = WinUpdater(log_level=args.log_level, log_to=args.log_to)
         agent.install_all()
 
     elif args.mode == "patchscan":
         from winupdater import WinUpdater
 
-        agent = WinUpdater()
+        agent = WinUpdater(log_level=args.log_level, log_to=args.log_to)
         agent.trigger_patch_scan()
 
     elif args.mode == "taskrunner":
         from taskrunner import TaskRunner
 
-        agent = TaskRunner(task_pk=args.taskpk)
+        agent = TaskRunner(
+            task_pk=args.taskpk, log_level=args.log_level, log_to=args.log_to
+        )
         agent.run()
 
     elif args.mode == "updatesalt":
         from agent import WindowsAgent
 
-        agent = WindowsAgent()
+        agent = WindowsAgent(log_level=args.log_level, log_to=args.log_to)
         agent.fix_salt(by_time=False)
         agent.update_salt()
 
     elif args.mode == "fixsalt":
         from agent import WindowsAgent
 
-        agent = WindowsAgent()
+        agent = WindowsAgent(log_level=args.log_level, log_to=args.log_to)
         agent.fix_salt()
 
     elif args.mode == "fixmesh":
         from agent import WindowsAgent
 
-        agent = WindowsAgent()
+        agent = WindowsAgent(log_level=args.log_level, log_to=args.log_to)
         agent.fix_mesh()
 
     elif args.mode == "cleanup":
         from agent import WindowsAgent
 
-        agent = WindowsAgent()
+        agent = WindowsAgent(log_level=args.log_level, log_to=args.log_to)
         agent.fix_salt(by_time=False)
         agent.cleanup()
 
     elif args.mode == "recoversalt":
         from agent import WindowsAgent
 
-        agent = WindowsAgent()
+        agent = WindowsAgent(log_level=args.log_level, log_to=args.log_to)
         agent.recover_salt()
 
     elif args.mode == "recovermesh":
         from agent import WindowsAgent
 
-        agent = WindowsAgent()
+        agent = WindowsAgent(log_level=args.log_level, log_to=args.log_to)
         agent.recover_mesh()
 
     else:

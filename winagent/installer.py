@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import random
 import re
@@ -6,6 +7,7 @@ import shutil
 import socket
 import string
 import subprocess
+import sys
 from time import sleep
 from urllib.parse import urlparse
 
@@ -29,6 +31,9 @@ class Installer:
         rdp,
         ping,
         auth_token,
+        local_salt,
+        local_mesh,
+        log_level="INFO",
     ):
         self.api_url = api_url
         self.client_id = client_id
@@ -39,6 +44,9 @@ class Installer:
         self.enable_rdp = rdp
         self.enable_ping = ping
         self.auth_token = auth_token
+        self.log_level = log_level
+        self.use_local_salt = local_salt
+        self.use_local_mesh = local_mesh
         self.programdir = "C:\\Program Files\\TacticalAgent"
         self.headers = {
             "content-type": "application/json",
@@ -50,6 +58,12 @@ class Installer:
         self.mesh_success = True
         self.accept_success = True
         self.sync_success = True
+        logging.basicConfig(
+            level=logging.getLevelName(self.log_level),
+            format="%(asctime)s - %(module)s - %(funcName)s - %(lineno)d - %(levelname)s - %(message)s",
+            handlers=[logging.StreamHandler(sys.stdout)],
+        )
+        self.logger = logging.getLogger(__name__)
 
     def rand_string(self):
         chars = string.ascii_letters
@@ -61,18 +75,19 @@ class Installer:
             r = subprocess.run(
                 ["wmic", "csproduct", "get", "uuid"], capture_output=True
             )
-            wmic_id = r.stdout.decode().splitlines()[2].strip()
+            wmic_id = r.stdout.decode("utf-8", errors="ignore").splitlines()[2].strip()
         except Exception:
             self.agent_id = f"{self.rand_string()}|{self.agent_hostname}"
         else:
             self.agent_id = f"{wmic_id}|{self.agent_hostname}"
 
+        self.logger.debug(f"Agent ID: {self.agent_id}")
         # validate the url and get the salt master
         r = urlparse(self.api_url)
 
         if r.scheme != "https" and r.scheme != "http":
-            print("api url must contain https or http")
-            raise SystemExit()
+            print("ERROR: api url must contain https or http")
+            sys.exit(1)
 
         if validators.domain(r.netloc):
             self.salt_master = r.netloc
@@ -83,8 +98,10 @@ class Installer:
             else:
                 self.salt_master = r.netloc.split(":")[0]
         else:
-            print("Error parsing api url")
-            raise SystemExit()
+            print("Error parsing api url, unable to get salt-master")
+            sys.exit(1)
+
+        self.logger.debug(f"Salt master is: {self.salt_master}")
 
         # set the api base url
         self.api = f"{r.scheme}://{r.netloc}"
@@ -96,58 +113,83 @@ class Installer:
             r = requests.post(
                 url, json.dumps(payload), headers=self.headers, timeout=15
             )
-        except Exception:
+        except Exception as e:
+            self.logger.error(e)
             print(
                 "ERROR: Unable to contact the RMM. Please check your internet connection."
             )
-            raise SystemExit()
+            sys.exit(1)
 
         if r.status_code == 401:
-            print("Token has expired. Please generate a new one from the rmm.")
-            raise SystemExit()
+            print("ERROR: Token has expired. Please generate a new one from the rmm.")
+            sys.exit(1)
         elif r.status_code != 200:
             e = json.loads(r.text)["error"]
-            print(e)
-            raise SystemExit()
+            self.logger.error(e)
+            sys.exit(1)
         else:
             self.agent_token = json.loads(r.text)["token"]
 
-        # download salt
-        print("Downloading salt minion")
-        r = requests.get(
-            "https://github.com/wh1te909/winagent/raw/master/bin/salt-minion-setup.exe",
-            stream=True,
-        )
-
-        if r.status_code != 200:
-            print("Unable to download salt-minion")
-            raise SystemExit()
-
         minion = os.path.join(self.programdir, "salt-minion-setup.exe")
-        with open(minion, "wb") as f:
-            for chunk in r.iter_content(chunk_size=1024):
-                if chunk:
-                    f.write(chunk)
+        if not self.use_local_salt:
+            # download salt
+            print("Downloading salt minion")
+            try:
+                r = requests.get(
+                    "https://github.com/wh1te909/winagent/raw/master/bin/salt-minion-setup.exe",
+                    stream=True,
+                    timeout=900,
+                )
+            except Exception as e:
+                self.logger.error(e)
+                print("ERROR: Timed out trying to download the salt-minion")
+                sys.exit(1)
 
-        del r
+            if r.status_code != 200:
+                print("ERROR: Something went wrong while downloading the salt-minion")
+                sys.exit(1)
 
-        # download mesh agent
-        url = f"{self.api}/api/v1/getmeshexe/"
-        r = requests.post(url, headers=self.headers, stream=True)
+            with open(minion, "wb") as f:
+                for chunk in r.iter_content(chunk_size=1024):
+                    if chunk:
+                        f.write(chunk)
 
-        if r.status_code != 200:
-            print("Unable to download meshagent.")
-            print("Please refer to the readme for instructions on how to upload it.")
-            raise SystemExit()
+            del r
+        else:
+            if not os.path.exists(minion):
+                print(
+                    f"ERROR: --local-salt was passed to the installer but {minion} does not exist."
+                )
+                sys.exit(1)
 
         mesh = os.path.join(self.programdir, "meshagent.exe")
+        if not self.use_local_mesh:
+            # download mesh agent
+            url = f"{self.api}/api/v1/getmeshexe/"
+            try:
+                r = requests.post(url, headers=self.headers, stream=True, timeout=400)
+            except Exception as e:
+                self.logger.error(e)
+                print("ERROR: Timed out trying to download the Mesh Agent")
+                sys.exit(1)
 
-        with open(mesh, "wb") as f:
-            for chunk in r.iter_content(chunk_size=1024):
-                if chunk:
-                    f.write(chunk)
+            if r.status_code != 200:
+                print("ERROR: Something went wrong while downloading the Mesh Agent")
+                sys.exit(1)
 
-        del r
+            with open(mesh, "wb") as f:
+                for chunk in r.iter_content(chunk_size=1024):
+                    if chunk:
+                        f.write(chunk)
+
+            del r
+
+        else:
+            if not os.path.exists(mesh):
+                print(
+                    f"ERROR: --local-mesh was passed to the installer but {mesh} does not exist."
+                )
+                sys.exit(1)
 
         # check for existing mesh installations and remove
         mesh_exists = False
@@ -186,9 +228,12 @@ class Installer:
                 for pid in mesh_pids:
                     kill_proc(pid)
 
-            r = subprocess.run(
-                [mesh, "-fulluninstall"], capture_output=True, timeout=60
-            )
+            try:
+                r = subprocess.run(
+                    [mesh, "-fulluninstall"], capture_output=True, timeout=60
+                )
+            except:
+                print("Timed out trying to uninstall existing Mesh Agent")
 
             if os.path.exists(mesh_cleanup_dir):
                 try:
@@ -200,8 +245,13 @@ class Installer:
 
         # install the mesh agent
         print("Installing mesh agent")
-        ret = subprocess.run([mesh, "-fullinstall"], capture_output=True)
-        sleep(10)
+        try:
+            ret = subprocess.run(
+                [mesh, "-fullinstall"], capture_output=True, timeout=120
+            )
+        except:
+            print("Timed out trying to install the Mesh Agent")
+        sleep(15)
 
         # meshcentral changed their installation path recently
         mesh_one = os.path.join(mesh_one_dir, "MeshAgent.exe")
@@ -215,30 +265,39 @@ class Installer:
             mesh_exe = mesh
 
         mesh_attempts = 0
+        mesh_retries = 20
         while 1:
             try:
-                mesh_cmd = subprocess.run([mesh_exe, "-nodeidhex"], capture_output=True)
-                mesh_node_id = mesh_cmd.stdout.decode().strip()
+                mesh_cmd = subprocess.run(
+                    [mesh_exe, "-nodeidhex"], capture_output=True, timeout=30
+                )
+                mesh_node_id = mesh_cmd.stdout.decode("utf-8", errors="ignore").strip()
             except Exception:
                 mesh_attempts += 1
+                print(
+                    f"Failed to get mesh node id: attempt {mesh_attempts} of {mesh_retries}"
+                )
                 sleep(5)
             else:
                 if "not defined" in mesh_node_id.lower():
-                    sleep(5)
                     mesh_attempts += 1
+                    print(
+                        f"Failed to get mesh node id: attempt {mesh_attempts} of {mesh_retries}"
+                    )
+                    sleep(5)
                 else:
                     mesh_attempts = 0
 
             if mesh_attempts == 0:
                 break
-            elif mesh_attempts > 20:
+            elif mesh_attempts > mesh_retries:
                 self.mesh_success = False
                 mesh_node_id = "error installing meshagent"
                 break
 
         self.mesh_node_id = mesh_node_id
+        self.logger.debug(f"Mesh node id: {mesh_node_id}")
 
-        # add the agent to the dashboard
         print("Adding agent to dashboard")
 
         url = f"{self.api}/api/v1/add/"
@@ -251,11 +310,19 @@ class Installer:
             "description": self.agent_desc,
             "monitoring_type": self.agent_type,
         }
-        r = requests.post(url, json.dumps(payload), headers=self.headers)
+        self.logger.debug(payload)
+
+        try:
+            r = requests.post(
+                url, json.dumps(payload), headers=self.headers, timeout=60
+            )
+        except Exception as e:
+            self.logger.error(e)
+            sys.exit(1)
 
         if r.status_code != 200:
             print("Error adding agent to dashboard")
-            raise SystemExit()
+            sys.exit(1)
 
         self.agent_pk = r.json()["pk"]
         self.salt_id = f"{self.agent_hostname}-{self.agent_pk}"
@@ -274,10 +341,10 @@ class Installer:
                 ).save()
         except Exception as e:
             print(f"Error creating database: {e}")
-            raise SystemExit()
+            sys.exit(1)
 
         # install salt
-        print("Installing salt")
+        print("Installing the salt-minion, this might take a while...")
 
         salt_cmd = [
             "salt-minion-setup.exe",
@@ -288,59 +355,88 @@ class Installer:
             "/start-minion=1",
         ]
         install_salt = subprocess.run(salt_cmd, cwd=self.programdir, shell=True)
-        sleep(15)  # wait for salt to register on the master
+        # give time for salt to fully install since the above command returns immmediately
+        sleep(60)
 
         # accept the salt key on the master
         url = f"{self.api}/api/v1/acceptsaltkey/"
         payload = {"saltid": self.salt_id}
         accept_attempts = 0
+        salt_retries = 20
 
         while 1:
-            r = requests.post(url, json.dumps(payload), headers=self.headers)
-            if r.status_code != 200:
+            try:
+                r = requests.post(
+                    url, json.dumps(payload), headers=self.headers, timeout=30
+                )
+            except Exception as e:
+                logger.debug(e)
                 accept_attempts += 1
                 sleep(5)
             else:
-                accept_attempts = 0
+                if r.status_code != 200:
+                    accept_attempts += 1
+                    print(
+                        f"Salt-key was not accepted: attempt {accept_attempts} of {salt_retries}"
+                    )
+                    sleep(5)
+                else:
+                    accept_attempts = 0
 
             if accept_attempts == 0:
+                print("Salt-key was accepted!")
                 break
-            else:
-                if accept_attempts > 20:
-                    self.accept_success = False
-                    break
+            elif accept_attempts > salt_retries:
+                self.accept_success = False
+                break
 
-        sleep(15)  # wait for salt to start
+        print("Waiting for salt to sync with the master")
+        sleep(10)  # wait for salt to sync
 
         # sync our custom salt modules
+        print("Syncing custom modules")
         url = f"{self.api}/api/v1/firstinstall/"
         payload = {"pk": self.agent_pk}
         sync_attempts = 0
+        sync_retries = 20
 
         while 1:
-            r = requests.post(url, json.dumps(payload), headers=self.headers)
-
-            if r.status_code != 200:
+            try:
+                r = requests.post(
+                    url, json.dumps(payload), headers=self.headers, timeout=30
+                )
+            except Exception as e:
+                self.logger.debug(e)
                 sync_attempts += 1
                 sleep(5)
             else:
-                sync_attempts = 0
+                if r.status_code != 200:
+                    sync_attempts += 1
+                    print(
+                        f"Syncing modules failed: attempt {sync_attempts} of {sync_retries}"
+                    )
+                    sleep(5)
+                else:
+                    sync_attempts = 0
 
             if sync_attempts == 0:
+                print("Modules were synced!")
                 break
-            else:
-                if sync_attempts > 20:
-                    self.sync_success = False
-                    break
+            elif sync_attempts > sync_retries:
+                self.sync_success = False
+                break
 
         sleep(10)  # wait a bit for modules to fully sync
 
         # create the scheduled tasks
         from agent import WindowsAgent
 
-        agent = WindowsAgent()
-        agent.create_fix_salt_task()
-        agent.create_fix_mesh_task()
+        try:
+            agent = WindowsAgent()
+            agent.create_fix_salt_task()
+            agent.create_fix_mesh_task()
+        except Exception as e:
+            self.logger.debug(e)
 
         # remove services if they exists
         try:
@@ -430,19 +526,27 @@ class Installer:
 
         # finish up
         if not self.accept_success:
-            print("The RMM was unable to accept the salt minion.")
-            print("Run the following command on the rmm:")
+            print("-" * 75)
+            print("ERROR: The RMM was unable to accept the salt minion.")
+            print("Salt may not have been properly installed.")
+            print("Try running the following command on the rmm:")
             print(f"sudo salt-key -y -a '{self.salt_id}'")
+            print("-" * 75)
 
         if not self.sync_success:
+            print("-" * 75)
             print("Unable to sync salt modules.")
             print("Salt may not have been properly installed.")
+            print("-" * 75)
 
         if not self.mesh_success:
+            print("-" * 75)
             print("The Mesh Agent was not installed properly.")
             print("Some features will not work.")
+            print("-" * 75)
 
         if self.accept_success and self.sync_success and self.mesh_success:
-            print("Installation was successfull.")
+            print("Installation was successfull!")
+            print("Allow a few minutes for the agent to properly display in the RMM")
         else:
-            print("Installation finished with errors.")
+            print("*****Installation finished with errors.*****")
