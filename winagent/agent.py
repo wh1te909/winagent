@@ -9,6 +9,7 @@ import shutil
 import signal
 import socket
 import subprocess
+import sys
 from collections import defaultdict
 from time import perf_counter, sleep
 
@@ -47,7 +48,9 @@ class AgentStorage(peewee.Model):
 
 
 class WindowsAgent:
-    def __init__(self):
+    def __init__(self, log_level="INFO", log_to="file"):
+        self.log_level = log_level
+        self.log_to = log_to
         self.hostname = socket.gethostname()
         self.platform = platform.system().lower()
         self.astor = self.get_db()
@@ -59,18 +62,13 @@ class WindowsAgent:
             "content-type": "application/json",
             "Authorization": f"Token {self.astor.token}",
         }
-        logging.basicConfig(
-            filename=os.path.join(self.programdir, "winagent.log"),
-            level=logging.INFO,
-            format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        )
-        self.logger = logging.getLogger(__name__)
         self.salt_minion_exe = (
             "https://github.com/wh1te909/winagent/raw/master/bin/salt-minion-setup.exe"
         )
+        self.setup_logging()
+        self.version = self.get_agent_version()
 
-    @property
-    def version(self):
+    def get_agent_version(self):
         try:
             with open(os.path.join(self.programdir, "VERSION")) as f:
                 ver = f.read().strip()
@@ -78,6 +76,19 @@ class WindowsAgent:
             return ver
         except:
             return "0.0.1"
+
+    def setup_logging(self):
+        if self.log_to == "stdout":
+            handler = logging.StreamHandler(sys.stdout)
+        else:
+            handler = logging.FileHandler(os.path.join(self.programdir, "winagent.log"))
+
+        logging.basicConfig(
+            level=logging.getLevelName(self.log_level),
+            format="%(asctime)s - %(module)s - %(funcName)s - %(lineno)d - %(levelname)s - %(message)s",
+            handlers=[handler],
+        )
+        self.logger = logging.getLogger(__name__)
 
     async def script_check(self, data):
 
@@ -94,6 +105,13 @@ class WindowsAgent:
                     script_filename,
                     f"timeout={timeout}",
                 ]
+                try:
+                    script_type = data["script"]["script_type"]
+                except KeyError:
+                    pass
+                else:
+                    cmd.append(f"script_type={script_type}")
+
             else:
                 cmd = [
                     self.salt_call,
@@ -103,6 +121,7 @@ class WindowsAgent:
                     f"timeout={timeout}",
                 ]
 
+            self.logger.debug(cmd)
             start = perf_counter()
 
             proc = await asyncio.create_subprocess_exec(
@@ -121,7 +140,7 @@ class WindowsAgent:
                 except:
                     pass
 
-                self.logger.error(f"Script check timed out after {timeout} seconds")
+                self.logger.debug(f"Script check timed out after {timeout} seconds")
                 proc_stdout, proc_stderr = False, False
                 stdout = ""
                 stderr = f"Script timed out after {timeout} seconds"
@@ -153,6 +172,8 @@ class WindowsAgent:
                 "execution_time": "{:.4f}".format(round(stop - start)),
             }
 
+            self.logger.debug(payload)
+
             resp = requests.patch(
                 f"{self.astor.server}/api/v1/{data['id']}/checkrunner/",
                 json.dumps(payload),
@@ -167,11 +188,16 @@ class WindowsAgent:
             ):
                 from taskrunner import TaskRunner
 
-                task = TaskRunner(task_pk=data["assigned_task"]["id"])
+                task = TaskRunner(
+                    task_pk=data["assigned_task"]["id"],
+                    log_level=self.log_level,
+                    log_to=self.log_to,
+                )
                 await task.run_while_in_event_loop()
 
             return status
-        except:
+        except Exception as e:
+            self.logger.debug(e)
             return "failing"
 
     async def ping_check(self, data):
@@ -201,6 +227,8 @@ class WindowsAgent:
                 "more_info": output,
             }
 
+            self.logger.debug(payload)
+
             resp = requests.patch(
                 f"{self.astor.server}/api/v1/{data['id']}/checkrunner/",
                 json.dumps(payload),
@@ -215,11 +243,16 @@ class WindowsAgent:
             ):
                 from taskrunner import TaskRunner
 
-                task = TaskRunner(task_pk=data["assigned_task"]["id"])
+                task = TaskRunner(
+                    task_pk=data["assigned_task"]["id"],
+                    log_level=self.log_level,
+                    log_to=self.log_to,
+                )
                 await task.run_while_in_event_loop()
 
             return status
-        except:
+        except Exception as e:
+            self.logger.debug(e)
             return "failing"
 
     async def disk_check(self, data, exists=True):
@@ -249,6 +282,8 @@ class WindowsAgent:
             "more_info": more_info,
         }
 
+        self.logger.debug(payload)
+
         resp = requests.patch(
             f"{self.astor.server}/api/v1/{data['id']}/checkrunner/",
             json.dumps(payload),
@@ -263,7 +298,11 @@ class WindowsAgent:
         ):
             from taskrunner import TaskRunner
 
-            task = TaskRunner(task_pk=data["assigned_task"]["id"])
+            task = TaskRunner(
+                task_pk=data["assigned_task"]["id"],
+                log_level=self.log_level,
+                log_to=self.log_to,
+            )
             await task.run_while_in_event_loop()
 
         return status
@@ -284,7 +323,8 @@ class WindowsAgent:
             )
 
             return "ok"
-        except:
+        except Exception as e:
+            self.logger.debug(e)
             return False
 
     async def mem_check(self, data):
@@ -300,7 +340,8 @@ class WindowsAgent:
             )
 
             return "ok"
-        except:
+        except Exception as e:
+            self.logger.debug(e)
             return False
 
     async def win_service_check(self, data, exists=True):
@@ -358,6 +399,8 @@ class WindowsAgent:
                 else f"Service {data['svc_name']} does not exist",
             }
 
+            self.logger.debug(payload)
+
             resp = requests.patch(
                 f"{self.astor.server}/api/v1/{data['id']}/checkrunner/",
                 json.dumps(payload),
@@ -372,11 +415,16 @@ class WindowsAgent:
             ):
                 from taskrunner import TaskRunner
 
-                task = TaskRunner(task_pk=data["assigned_task"]["id"])
+                task = TaskRunner(
+                    task_pk=data["assigned_task"]["id"],
+                    log_level=self.log_level,
+                    log_to=self.log_to,
+                )
                 await task.run_while_in_event_loop()
 
             return status
-        except:
+        except Exception as e:
+            self.logger.debug(e)
             return "failing"
 
     async def event_log_check(self, data):
@@ -486,6 +534,8 @@ class WindowsAgent:
                 "extra_details": more_info,
             }
 
+            self.logger.debug(payload)
+
             resp = requests.patch(
                 f"{self.astor.server}/api/v1/{data['id']}/checkrunner/",
                 json.dumps(payload),
@@ -500,12 +550,16 @@ class WindowsAgent:
             ):
                 from taskrunner import TaskRunner
 
-                task = TaskRunner(task_pk=data["assigned_task"]["id"])
+                task = TaskRunner(
+                    task_pk=data["assigned_task"]["id"],
+                    log_level=self.log_level,
+                    log_to=self.log_to,
+                )
                 await task.run_while_in_event_loop()
 
             return status
         except Exception as e:
-            self.logger.error(f"Event log check failed: {e}")
+            self.logger.debug(e)
             return "failing"
 
     def get_db(self):
@@ -546,19 +600,21 @@ class WindowsAgent:
             else:
                 return ifconfig
 
-        except Exception:
+        except Exception as e:
+            self.logger.debug(e)
             return "error"
 
     def get_cmd_output(self, cmd, timeout=30):
         try:
             r = subprocess.run(cmd, capture_output=True, timeout=timeout)
-        except Exception:
+        except Exception as e:
+            self.logger.debug(e)
             return "error getting output"
 
         if r.stdout:
-            return r.stdout.decode()
+            return r.stdout.decode("utf-8", errors="ignore")
         elif r.stderr:
-            return r.stderr.decode()
+            return r.stderr.decode("utf-8", errors="ignore")
         else:
             return "error getting output"
 
@@ -568,7 +624,8 @@ class WindowsAgent:
             return (
                 f"{os.Caption}, {platform.architecture()[0]} (build {os.BuildNumber})"
             )
-        except Exception:
+        except Exception as e:
+            self.logger.debug(e)
             return "unknown-os"
 
     def get_disks(self):
@@ -586,7 +643,8 @@ class WindowsAgent:
                 disks[device]["free"] = bytes2human(usage.free)
                 disks[device]["percent"] = int(usage.percent)
                 disks[device]["fstype"] = part.fstype
-        except Exception:
+        except Exception as e:
+            self.logger.debug(e)
             disks = {"error": "error getting disk info"}
 
         return disks
@@ -597,42 +655,52 @@ class WindowsAgent:
             grains = get_windows_os_release_grain(os["Caption"], os["ProductType"])
             plat = platform.system().lower()
             plat_release = f"{plat}-{grains}"
-        except Exception:
+        except Exception as e:
+            self.logger.debug(e)
             plat_release = "unknown-release"
 
         return plat_release
 
     def get_av(self):
-        r = subprocess.run(
-            [
-                "wmic",
-                "/Namespace:\\\\root\SecurityCenter2",
-                "Path",
-                "AntiVirusProduct",
-                "get",
-                "displayName" "/FORMAT:List",
-            ],
-            capture_output=True,
-            timeout=30,
-        )
+        try:
+            r = subprocess.run(
+                [
+                    "wmic",
+                    "/Namespace:\\\\root\SecurityCenter2",
+                    "Path",
+                    "AntiVirusProduct",
+                    "get",
+                    "displayName" "/FORMAT:List",
+                ],
+                capture_output=True,
+                timeout=30,
+            )
 
-        if r.stdout:
-            out = r.stdout.decode().lower().replace(" ", "").splitlines()
-            out[:] = [i for i in out if i != ""]  # remove empty list items
+            if r.stdout:
+                out = (
+                    r.stdout.decode("utf-8", errors="ignore")
+                    .lower()
+                    .replace(" ", "")
+                    .splitlines()
+                )
+                out[:] = [i for i in out if i != ""]  # remove empty list items
 
-            if len(out) == 1 and out[0] == "displayname=windowsdefender":
-                return "windowsdefender"
+                if len(out) == 1 and out[0] == "displayname=windowsdefender":
+                    return "windowsdefender"
 
-            elif len(out) == 2:
-                if "displayname=windowsdefender" in out:
-                    out.remove("displayname=windowsdefender")
-                    return out[0].split("displayname=", 1)[1]
+                elif len(out) == 2:
+                    if "displayname=windowsdefender" in out:
+                        out.remove("displayname=windowsdefender")
+                        return out[0].split("displayname=", 1)[1]
 
-            return "n/a"
+                return "n/a"
 
-        elif r.stderr:
-            return "n/a"
-        else:
+            elif r.stderr:
+                return "n/a"
+            else:
+                return "n/a"
+        except Exception as e:
+            self.logger.debug(e)
             return "n/a"
 
     def salt_call_ret_bool(self, cmd, args=[], timeout=30):
@@ -645,7 +713,8 @@ class WindowsAgent:
                 command[2:2] = args
 
             r = subprocess.run(command, capture_output=True, timeout=timeout)
-        except Exception:
+        except Exception as e:
+            self.logger.debug(e)
             return False
         else:
             try:
@@ -654,7 +723,8 @@ class WindowsAgent:
                     return True
                 else:
                     return False
-            except:
+            except Exception as e:
+                self.logger.debug(e)
                 return False
 
     def get_salt_version(self):
@@ -665,7 +735,8 @@ class WindowsAgent:
             ver = [
                 (k, v) for k, v in ret["local"].items() if "salt minion" in k.lower()
             ][0][1]
-        except:
+        except Exception as e:
+            self.logger.debug(e)
             return False
         else:
             return ver
@@ -681,7 +752,8 @@ class WindowsAgent:
                 current_ver = r.json()["currentVer"]
                 latest_ver = r.json()["latestVer"]
                 salt_id = r.json()["salt_id"]
-            except Exception:
+            except Exception as e:
+                self.logger.error(e)
                 return
 
             installed_ver = self.get_salt_version()
@@ -785,7 +857,7 @@ class WindowsAgent:
             self._mesh_service_action("start")
             return
 
-        node_hex = r.stdout.decode().strip()
+        node_hex = r.stdout.decode("utf-8", errors="ignore").strip()
         if "not defined" in node_hex.lower():
             self._mesh_service_action("start")
             return

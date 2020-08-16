@@ -7,28 +7,32 @@ from agent import WindowsAgent
 
 
 class WinUpdater(WindowsAgent):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, log_level, log_to):
+        super().__init__(log_level, log_to)
         self.updater_url = f"{self.astor.server}/winupdate/winupdater/"
         self.results_url = f"{self.astor.server}/winupdate/results/"
         self.scan_url = f"{self.astor.server}/api/v1/triggerpatchscan/"
         self.check_payload = {"agent_id": self.astor.agentid}
 
     def install_update(self, kb):
-        r = subprocess.run(
-            [
-                self.salt_call,
-                "win_wua.get",
-                f"{kb}",
-                "download=True",
-                "install=True",
-                "--local",
-            ],
-            capture_output=True,
-            timeout=7200,
-        )
-
-        return r.stdout.decode("utf-8", errors="ignore")
+        try:
+            r = subprocess.run(
+                [
+                    self.salt_call,
+                    "win_wua.get",
+                    f"{kb}",
+                    "download=True",
+                    "install=True",
+                    "--local",
+                ],
+                capture_output=True,
+                timeout=7200,
+            )
+            ret = r.stdout.decode("utf-8", errors="ignore")
+            self.logger.debug(ret)
+            return ret
+        except Exception as e:
+            self.logger.debug(e)
 
     def trigger_patch_scan(self):
         try:
@@ -42,7 +46,8 @@ class WinUpdater(WindowsAgent):
                 headers=self.headers,
                 timeout=60,
             )
-        except:
+        except Exception as e:
+            self.logger.debug(e)
             return False
 
         return "ok"
@@ -55,7 +60,8 @@ class WinUpdater(WindowsAgent):
                 headers=self.headers,
                 timeout=30,
             )
-        except Exception:
+        except Exception as e:
+            self.logger.debug(e)
             return False
         else:
             if resp.json() == "nopatches":
@@ -91,4 +97,4 @@ class WinUpdater(WindowsAgent):
                     self.trigger_patch_scan()
 
                 except Exception as e:
-                    self.logger.error(e)
+                    self.logger.debug(e)

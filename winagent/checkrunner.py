@@ -8,16 +8,17 @@ from agent import WindowsAgent
 
 
 class CheckRunner(WindowsAgent):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, log_level, log_to):
+        super().__init__(log_level, log_to)
         self.checkrunner_url = (
             f"{self.astor.server}/api/v1/{self.astor.agentpk}/checkrunner/"
         )
 
     def get_checks(self):
         try:
-            resp = requests.get(self.checkrunner_url, headers=self.headers, timeout=15,)
-        except:
+            resp = requests.get(self.checkrunner_url, headers=self.headers, timeout=15)
+        except Exception as e:
+            self.logger.debug(e)
             return False
         else:
             try:
@@ -26,7 +27,8 @@ class CheckRunner(WindowsAgent):
                     return data
                 else:
                     return False
-            except:
+            except Exception as e:
+                self.logger.debug(e)
                 return False
 
     async def run_checks(self, data):
@@ -60,18 +62,14 @@ class CheckRunner(WindowsAgent):
             await asyncio.gather(*tasks)
 
         except Exception as e:
-            self.logger.error(f"Error running checks: {e}")
+            self.logger.debug(e)
 
     def run(self):
         ret = self.get_checks()
         if not ret:
             return False
         else:
-            try:
-                asyncio.run(self.run_checks(ret))
-            except Exception as e:
-                self.logger.error(f"Error running manual checks: {e}")
-                return False
+            asyncio.run(self.run_checks(ret))
 
     def run_forever(self):
         self.logger.info("Checkrunner service started")
@@ -87,8 +85,8 @@ class CheckRunner(WindowsAgent):
                     try:
                         interval = int(ret["check_interval"])
                         asyncio.run(self.run_checks(ret))
-                    except:
-                        pass
+                    except Exception as e:
+                        self.logger.debug(e)
                     finally:
                         sleep(interval)
                 else:
