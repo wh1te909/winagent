@@ -55,8 +55,20 @@ def main():
     )
     parser.add_argument("--auth", action="store", dest="auth_token", type=str)
     parser.add_argument("--version", action="store_true")
-    parser.add_argument("--local-salt", action="store_true")
-    parser.add_argument("--local-mesh", action="store_true")
+    parser.add_argument(
+        "--local-salt",
+        action="store",
+        dest="local_salt",
+        type=str,
+        help=r'The full path to the salt-minion executable e.g. "C:\\temp\\salt-minion-setup.exe"',
+    )
+    parser.add_argument(
+        "--local-mesh",
+        action="store",
+        dest="local_mesh",
+        type=str,
+        help=r'The full path to the Mesh Agent executable e.g. "C:\\temp\\meshagent.exe"',
+    )
     args = parser.parse_args()
 
     if args.version:
@@ -78,6 +90,34 @@ def main():
         ):
             parser.print_help()
             sys.exit(1)
+
+        if args.local_salt:
+            if not os.path.exists(args.local_salt):
+                parser.print_help()
+                print(f"\nError: {args.local_salt} does not exist\n")
+                sys.exit(1)
+            if not os.path.isfile(args.local_salt):
+                parser.print_help()
+                print(f"\nError: {args.local_salt} must be a file, not a folder.")
+                print(
+                    r'Make sure to use double backslashes for file paths, and double quotes e.g. "C:\\temp\\salt-minion-setup.exe"'
+                )
+                print("")
+                sys.exit(1)
+
+        if args.local_mesh:
+            if not os.path.exists(args.local_mesh):
+                parser.print_help()
+                print(f"\nError: {args.local_mesh} does not exist\n")
+                sys.exit(1)
+            if not os.path.isfile(args.local_mesh):
+                parser.print_help()
+                print(f"\nError: {args.local_mesh} must be a file, not a folder.")
+                print(
+                    r'Make sure to use double backslashes for file paths, and double quotes e.g. "C:\\temp\\meshagent.exe"'
+                )
+                print("")
+                sys.exit(1)
 
         from installer import Installer
 

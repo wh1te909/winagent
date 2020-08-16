@@ -45,8 +45,8 @@ class Installer:
         self.enable_ping = ping
         self.auth_token = auth_token
         self.log_level = log_level
-        self.use_local_salt = local_salt
-        self.use_local_mesh = local_mesh
+        self.local_salt = local_salt
+        self.local_mesh = local_mesh
         self.programdir = "C:\\Program Files\\TacticalAgent"
         self.headers = {
             "content-type": "application/json",
@@ -130,8 +130,7 @@ class Installer:
         else:
             self.agent_token = json.loads(r.text)["token"]
 
-        minion = os.path.join(self.programdir, "salt-minion-setup.exe")
-        if not self.use_local_salt:
+        if not self.local_salt:
             # download salt
             print("Downloading salt minion")
             try:
@@ -149,6 +148,7 @@ class Installer:
                 print("ERROR: Something went wrong while downloading the salt-minion")
                 sys.exit(1)
 
+            minion = os.path.join(self.programdir, "salt-minion-setup.exe")
             with open(minion, "wb") as f:
                 for chunk in r.iter_content(chunk_size=1024):
                     if chunk:
@@ -156,14 +156,21 @@ class Installer:
 
             del r
         else:
-            if not os.path.exists(minion):
+            try:
+                shutil.copy2(
+                    self.local_salt,
+                    os.path.join(self.programdir, "salt-minion-setup.exe"),
+                )
+            except Exception as e:
+                print(e)
                 print(
-                    f"ERROR: --local-salt was passed to the installer but {minion} does not exist."
+                    f"\nERROR: unable to copy the file {self.local_salt} to {self.programdir}"
                 )
                 sys.exit(1)
+            else:
+                minion = os.path.join(self.programdir, "salt-minion-setup.exe")
 
-        mesh = os.path.join(self.programdir, "meshagent.exe")
-        if not self.use_local_mesh:
+        if not self.local_mesh:
             # download mesh agent
             url = f"{self.api}/api/v1/getmeshexe/"
             try:
@@ -177,6 +184,7 @@ class Installer:
                 print("ERROR: Something went wrong while downloading the Mesh Agent")
                 sys.exit(1)
 
+            mesh = os.path.join(self.programdir, "meshagent.exe")
             with open(mesh, "wb") as f:
                 for chunk in r.iter_content(chunk_size=1024):
                     if chunk:
@@ -185,11 +193,18 @@ class Installer:
             del r
 
         else:
-            if not os.path.exists(mesh):
+            try:
+                shutil.copy2(
+                    self.local_mesh, os.path.join(self.programdir, "meshagent.exe")
+                )
+            except Exception as e:
+                print(e)
                 print(
-                    f"ERROR: --local-mesh was passed to the installer but {mesh} does not exist."
+                    f"\nERROR: unable to copy the file {self.local_mesh} to {self.programdir}"
                 )
                 sys.exit(1)
+            else:
+                mesh = os.path.join(self.programdir, "meshagent.exe")
 
         # check for existing mesh installations and remove
         mesh_exists = False
