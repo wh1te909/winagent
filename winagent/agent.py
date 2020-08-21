@@ -575,7 +575,26 @@ class WindowsAgent:
         return round(psutil.virtual_memory().percent)
 
     def get_services(self):
-        return [svc.as_dict() for svc in psutil.win_service_iter()]
+        # see https://github.com/wh1te909/tacticalrmm/issues/38
+        # for why I am manually implementing the svc.as_dict() method of psutil
+        ret = []
+        for svc in psutil.win_service_iter():
+            i = {}
+            try:
+                i["display_name"] = svc.display_name()
+                i["binpath"] = svc.binpath()
+                i["username"] = svc.username()
+                i["start_type"] = svc.start_type()
+                i["status"] = svc.status()
+                i["pid"] = svc.pid()
+                i["name"] = svc.name()
+                i["description"] = svc.description()
+            except Exception:
+                continue
+            else:
+                ret.append(i)
+        
+        return ret
 
     def get_total_ram(self):
         return math.ceil((psutil.virtual_memory().total / 1_073_741_824))
