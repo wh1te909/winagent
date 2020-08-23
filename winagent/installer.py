@@ -68,8 +68,50 @@ class Installer:
     def rand_string(self):
         chars = string.ascii_letters
         return "".join(random.choice(chars) for i in range(35))
+    
+    def uninstall_salt(self):
+        print("Stopping salt-minion service", flush=True)
+        r = subprocess.run(["sc", "stop", "salt-minion"], timeout=45, capture_output=True)
+        sleep(15)
+
+        # clean up any hung salt python procs
+        pids = []
+        for proc in psutil.process_iter():
+            with proc.oneshot():
+                if proc.name() == "python.exe" and "salt" in proc.exe():
+                    pids.append(proc.pid)
+
+        for pid in pids:
+            self.logger.debug(f"Killing salt process with pid {pid}")
+            try:
+                kill_proc(pid)
+            except:
+                continue
+        
+        print("Uninstalling existing salt-minion", flush=True)
+        r = subprocess.run(["c:\\salt\\uninst.exe", "/S"], timeout=120, capture_output=True)
+        sleep(20)
+
+        try:
+            shutil.rmtree("C:\\salt")
+            sleep(1)
+            os.system('rmdir /S /Q "{}"'.format("C:\\salt"))
+        except Exception:
+            pass
+        
+        print("Salt was removed", flush=True)
 
     def install(self):
+        # check for existing installation and exit if found
+        try:
+            tac = psutil.win_service_get("tacticalagent")
+        except psutil.NoSuchProcess:
+            pass
+        else:
+            print("Found tacticalagent service. Please uninstall the existing Tactical Agent first before reinstalling.", flush=True)
+            print("If you're trying to perform an upgrade, do so from the RMM web interface.", flush=True)
+            sys.exit(1)
+
         # generate the agent id
         try:
             r = subprocess.run(
@@ -381,6 +423,15 @@ class Installer:
             print(f"Error creating database: {e}", flush=True)
             sys.exit(1)
 
+        # install salt, remove any existing installations first
+        try:
+            oldsalt = psutil.win_service_get("salt-minion")
+        except psutil.NoSuchProcess:
+            pass
+        else:
+            print("Found existing salt-minion. Removing", flush=True)
+            self.uninstall_salt()
+        
         print("Installing the salt-minion, this might take a while...", flush=True)
 
         salt_cmd = [
