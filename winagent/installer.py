@@ -82,11 +82,12 @@ class Installer:
             self.agent_id = f"{wmic_id}|{self.agent_hostname}"
 
         self.logger.debug(f"Agent ID: {self.agent_id}")
+        sys.stdout.flush()
         # validate the url and get the salt master
         r = urlparse(self.api_url)
 
         if r.scheme != "https" and r.scheme != "http":
-            print("ERROR: api url must contain https or http")
+            print("ERROR: api url must contain https or http", flush=True)
             sys.exit(1)
 
         if validators.domain(r.netloc):
@@ -98,10 +99,11 @@ class Installer:
             else:
                 self.salt_master = r.netloc.split(":")[0]
         else:
-            print("Error parsing api url, unable to get salt-master")
+            print("Error parsing api url, unable to get salt-master", flush=True)
             sys.exit(1)
 
         self.logger.debug(f"Salt master is: {self.salt_master}")
+        sys.stdout.flush()
 
         # set the api base url
         self.api = f"{r.scheme}://{r.netloc}"
@@ -115,24 +117,30 @@ class Installer:
             )
         except Exception as e:
             self.logger.error(e)
+            sys.stdout.flush()
             print(
-                "ERROR: Unable to contact the RMM. Please check your internet connection."
+                "ERROR: Unable to contact the RMM. Please check your internet connection.",
+                flush=True,
             )
             sys.exit(1)
 
         if r.status_code == 401:
-            print("ERROR: Token has expired. Please generate a new one from the rmm.")
+            print(
+                "ERROR: Token has expired. Please generate a new one from the rmm.",
+                flush=True,
+            )
             sys.exit(1)
         elif r.status_code != 200:
             e = json.loads(r.text)["error"]
             self.logger.error(e)
+            sys.stdout.flush()
             sys.exit(1)
         else:
             self.agent_token = json.loads(r.text)["token"]
 
         if not self.local_salt:
             # download salt
-            print("Downloading salt minion")
+            print("Downloading salt minion", flush=True)
             try:
                 r = requests.get(
                     "https://github.com/wh1te909/winagent/raw/master/bin/salt-minion-setup.exe",
@@ -141,11 +149,15 @@ class Installer:
                 )
             except Exception as e:
                 self.logger.error(e)
-                print("ERROR: Timed out trying to download the salt-minion")
+                sys.stdout.flush()
+                print("ERROR: Timed out trying to download the salt-minion", flush=True)
                 sys.exit(1)
 
             if r.status_code != 200:
-                print("ERROR: Something went wrong while downloading the salt-minion")
+                print(
+                    "ERROR: Something went wrong while downloading the salt-minion",
+                    flush=True,
+                )
                 sys.exit(1)
 
             minion = os.path.join(self.programdir, "salt-minion-setup.exe")
@@ -162,9 +174,10 @@ class Installer:
                     os.path.join(self.programdir, "salt-minion-setup.exe"),
                 )
             except Exception as e:
-                print(e)
+                print(e, flush=True)
                 print(
-                    f"\nERROR: unable to copy the file {self.local_salt} to {self.programdir}"
+                    f"\nERROR: unable to copy the file {self.local_salt} to {self.programdir}",
+                    flush=True,
                 )
                 sys.exit(1)
             else:
@@ -177,11 +190,15 @@ class Installer:
                 r = requests.post(url, headers=self.headers, stream=True, timeout=400)
             except Exception as e:
                 self.logger.error(e)
-                print("ERROR: Timed out trying to download the Mesh Agent")
+                sys.stdout.flush()
+                print("ERROR: Timed out trying to download the Mesh Agent", flush=True)
                 sys.exit(1)
 
             if r.status_code != 200:
-                print("ERROR: Something went wrong while downloading the Mesh Agent")
+                print(
+                    "ERROR: Something went wrong while downloading the Mesh Agent",
+                    flush=True,
+                )
                 sys.exit(1)
 
             mesh = os.path.join(self.programdir, "meshagent.exe")
@@ -198,9 +215,10 @@ class Installer:
                     self.local_mesh, os.path.join(self.programdir, "meshagent.exe")
                 )
             except Exception as e:
-                print(e)
+                print(e, flush=True)
                 print(
-                    f"\nERROR: unable to copy the file {self.local_mesh} to {self.programdir}"
+                    f"\nERROR: unable to copy the file {self.local_mesh} to {self.programdir}",
+                    flush=True,
                 )
                 sys.exit(1)
             else:
@@ -219,7 +237,7 @@ class Installer:
             mesh_cleanup_dir = mesh_two_dir
 
         if mesh_exists:
-            print("Found existing Mesh Agent. Removing...")
+            print("Found existing Mesh Agent. Removing...", flush=True)
             try:
                 subprocess.run(
                     ["sc", "stop", "mesh agent"], capture_output=True, timeout=30
@@ -248,7 +266,7 @@ class Installer:
                     [mesh, "-fulluninstall"], capture_output=True, timeout=60
                 )
             except:
-                print("Timed out trying to uninstall existing Mesh Agent")
+                print("Timed out trying to uninstall existing Mesh Agent", flush=True)
 
             if os.path.exists(mesh_cleanup_dir):
                 try:
@@ -259,13 +277,13 @@ class Installer:
                     pass
 
         # install the mesh agent
-        print("Installing mesh agent")
+        print("Installing mesh agent", flush=True)
         try:
             ret = subprocess.run(
                 [mesh, "-fullinstall"], capture_output=True, timeout=120
             )
         except:
-            print("Timed out trying to install the Mesh Agent")
+            print("Timed out trying to install the Mesh Agent", flush=True)
         sleep(15)
 
         # meshcentral changed their installation path recently
@@ -290,14 +308,16 @@ class Installer:
             except Exception:
                 mesh_attempts += 1
                 print(
-                    f"Failed to get mesh node id: attempt {mesh_attempts} of {mesh_retries}"
+                    f"Failed to get mesh node id: attempt {mesh_attempts} of {mesh_retries}",
+                    flush=True,
                 )
                 sleep(5)
             else:
                 if "not defined" in mesh_node_id.lower():
                     mesh_attempts += 1
                     print(
-                        f"Failed to get mesh node id: attempt {mesh_attempts} of {mesh_retries}"
+                        f"Failed to get mesh node id: attempt {mesh_attempts} of {mesh_retries}",
+                        flush=True,
                     )
                     sleep(5)
                 else:
@@ -312,8 +332,9 @@ class Installer:
 
         self.mesh_node_id = mesh_node_id
         self.logger.debug(f"Mesh node id: {mesh_node_id}")
+        sys.stdout.flush()
 
-        print("Adding agent to dashboard")
+        print("Adding agent to dashboard", flush=True)
 
         url = f"{self.api}/api/v1/add/"
         payload = {
@@ -326,6 +347,7 @@ class Installer:
             "monitoring_type": self.agent_type,
         }
         self.logger.debug(payload)
+        sys.stdout.flush()
 
         try:
             r = requests.post(
@@ -333,10 +355,11 @@ class Installer:
             )
         except Exception as e:
             self.logger.error(e)
+            sys.stdout.flush()
             sys.exit(1)
 
         if r.status_code != 200:
-            print("Error adding agent to dashboard")
+            print("Error adding agent to dashboard", flush=True)
             sys.exit(1)
 
         self.agent_pk = r.json()["pk"]
@@ -355,11 +378,10 @@ class Installer:
                     salt_id=self.salt_id,
                 ).save()
         except Exception as e:
-            print(f"Error creating database: {e}")
+            print(f"Error creating database: {e}", flush=True)
             sys.exit(1)
 
-        # install salt
-        print("Installing the salt-minion, this might take a while...")
+        print("Installing the salt-minion, this might take a while...", flush=True)
 
         salt_cmd = [
             "salt-minion-setup.exe",
@@ -386,30 +408,32 @@ class Installer:
                 )
             except Exception as e:
                 logger.debug(e)
+                sys.stdout.flush()
                 accept_attempts += 1
                 sleep(5)
             else:
                 if r.status_code != 200:
                     accept_attempts += 1
                     print(
-                        f"Salt-key was not accepted: attempt {accept_attempts} of {salt_retries}"
+                        f"Salt-key was not accepted: attempt {accept_attempts} of {salt_retries}",
+                        flush=True,
                     )
                     sleep(5)
                 else:
                     accept_attempts = 0
 
             if accept_attempts == 0:
-                print("Salt-key was accepted!")
+                print("Salt-key was accepted!", flush=True)
                 break
             elif accept_attempts > salt_retries:
                 self.accept_success = False
                 break
 
-        print("Waiting for salt to sync with the master")
+        print("Waiting for salt to sync with the master", flush=True)
         sleep(10)  # wait for salt to sync
 
         # sync our custom salt modules
-        print("Syncing custom modules")
+        print("Syncing custom modules", flush=True)
         url = f"{self.api}/api/v1/firstinstall/"
         payload = {"pk": self.agent_pk}
         sync_attempts = 0
@@ -422,20 +446,22 @@ class Installer:
                 )
             except Exception as e:
                 self.logger.debug(e)
+                sys.stdout.flush()
                 sync_attempts += 1
                 sleep(5)
             else:
                 if r.status_code != 200:
                     sync_attempts += 1
                     print(
-                        f"Syncing modules failed: attempt {sync_attempts} of {sync_retries}"
+                        f"Syncing modules failed: attempt {sync_attempts} of {sync_retries}",
+                        flush=True,
                     )
                     sleep(5)
                 else:
                     sync_attempts = 0
 
             if sync_attempts == 0:
-                print("Modules were synced!")
+                print("Modules were synced!", flush=True)
                 break
             elif sync_attempts > sync_retries:
                 self.sync_success = False
@@ -452,6 +478,7 @@ class Installer:
             agent.create_fix_mesh_task()
         except Exception as e:
             self.logger.debug(e)
+            sys.stdout.flush()
 
         # remove services if they exists
         try:
@@ -459,7 +486,7 @@ class Installer:
         except psutil.NoSuchProcess:
             pass
         else:
-            print("Found tacticalagent service. Removing...")
+            print("Found tacticalagent service. Removing...", flush=True)
             subprocess.run([self.nssm, "stop", "tacticalagent"], capture_output=True)
             subprocess.run(
                 [self.nssm, "remove", "tacticalagent", "confirm"], capture_output=True
@@ -470,14 +497,14 @@ class Installer:
         except psutil.NoSuchProcess:
             pass
         else:
-            print("Found checkrunner service. Removing...")
+            print("Found checkrunner service. Removing...", flush=True)
             subprocess.run([self.nssm, "stop", "checkrunner"], capture_output=True)
             subprocess.run(
                 [self.nssm, "remove", "checkrunner", "confirm"], capture_output=True
             )
 
         # install the windows services
-        print("Installing services...")
+        print("Installing services...", flush=True)
         svc_commands = [
             [
                 self.nssm,
@@ -519,21 +546,21 @@ class Installer:
             subprocess.run(cmd, capture_output=True)
 
         if self.disable_power:
-            print("Disabling sleep/hibernate...")
+            print("Disabling sleep/hibernate...", flush=True)
             try:
                 disable_sleep_hibernate()
             except:
                 pass
 
         if self.enable_rdp:
-            print("Enabling RDP...")
+            print("Enabling RDP...", flush=True)
             try:
                 enable_rdp()
             except:
                 pass
 
         if self.enable_ping:
-            print("Enabling ping...")
+            print("Enabling ping...", flush=True)
             try:
                 enable_ping()
             except:
@@ -541,27 +568,30 @@ class Installer:
 
         # finish up
         if not self.accept_success:
-            print("-" * 75)
-            print("ERROR: The RMM was unable to accept the salt minion.")
-            print("Salt may not have been properly installed.")
-            print("Try running the following command on the rmm:")
-            print(f"sudo salt-key -y -a '{self.salt_id}'")
-            print("-" * 75)
+            print("-" * 75, flush=True)
+            print("ERROR: The RMM was unable to accept the salt minion.", flush=True)
+            print("Salt may not have been properly installed.", flush=True)
+            print("Try running the following command on the rmm:", flush=True)
+            print(f"sudo salt-key -y -a '{self.salt_id}'", flush=True)
+            print("-" * 75, flush=True)
 
         if not self.sync_success:
-            print("-" * 75)
-            print("Unable to sync salt modules.")
-            print("Salt may not have been properly installed.")
-            print("-" * 75)
+            print("-" * 75, flush=True)
+            print("Unable to sync salt modules.", flush=True)
+            print("Salt may not have been properly installed.", flush=True)
+            print("-" * 75, flush=True)
 
         if not self.mesh_success:
-            print("-" * 75)
-            print("The Mesh Agent was not installed properly.")
-            print("Some features will not work.")
-            print("-" * 75)
+            print("-" * 75, flush=True)
+            print("The Mesh Agent was not installed properly.", flush=True)
+            print("Some features will not work.", flush=True)
+            print("-" * 75, flush=True)
 
         if self.accept_success and self.sync_success and self.mesh_success:
-            print("Installation was successfull!")
-            print("Allow a few minutes for the agent to properly display in the RMM")
+            print("Installation was successfull!", flush=True)
+            print(
+                "Allow a few minutes for the agent to properly display in the RMM",
+                flush=True,
+            )
         else:
-            print("*****Installation finished with errors.*****")
+            print("*****Installation finished with errors.*****", flush=True)

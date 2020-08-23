@@ -94,29 +94,33 @@ def main():
         if args.local_salt:
             if not os.path.exists(args.local_salt):
                 parser.print_help()
-                print(f"\nError: {args.local_salt} does not exist\n")
+                sys.stdout.flush()
+                print(f"\nError: {args.local_salt} does not exist\n", flush=True)
                 sys.exit(1)
             if not os.path.isfile(args.local_salt):
                 parser.print_help()
-                print(f"\nError: {args.local_salt} must be a file, not a folder.")
+                sys.stdout.flush()
+                print(f"\nError: {args.local_salt} must be a file, not a folder.", flush=True)
                 print(
-                    r'Make sure to use double backslashes for file paths, and double quotes e.g. "C:\\temp\\salt-minion-setup.exe"'
+                    r'Make sure to use double backslashes for file paths, and double quotes e.g. "C:\\temp\\salt-minion-setup.exe"', flush=True
                 )
-                print("")
+                print("", flush=True)
                 sys.exit(1)
 
         if args.local_mesh:
             if not os.path.exists(args.local_mesh):
                 parser.print_help()
-                print(f"\nError: {args.local_mesh} does not exist\n")
+                sys.stdout.flush()
+                print(f"\nError: {args.local_mesh} does not exist\n", flush=True)
                 sys.exit(1)
             if not os.path.isfile(args.local_mesh):
                 parser.print_help()
-                print(f"\nError: {args.local_mesh} must be a file, not a folder.")
+                sys.stdout.flush()
+                print(f"\nError: {args.local_mesh} must be a file, not a folder.", flush=True)
                 print(
-                    r'Make sure to use double backslashes for file paths, and double quotes e.g. "C:\\temp\\meshagent.exe"'
+                    r'Make sure to use double backslashes for file paths, and double quotes e.g. "C:\\temp\\meshagent.exe"', flush=True
                 )
-                print("")
+                print("", flush=True)
                 sys.exit(1)
 
         from installer import Installer
