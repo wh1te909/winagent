@@ -437,6 +437,11 @@ class WindowsAgent:
             api_fail_when = data["fail_when"]
             api_search_last_days = int(data["search_last_days"])
 
+            try:
+                api_event_id_is_wildcard = data["event_id_is_wildcard"]
+            except KeyError:
+                api_event_id_is_wildcard = False
+
             if api_search_last_days != 0:
                 start_time = dt.datetime.now() - dt.timedelta(days=api_search_last_days)
 
@@ -502,7 +507,10 @@ class WindowsAgent:
                         "uid": uid,
                     }
 
-                    if int(evt_id) == api_event_id and evt_type == api_event_type:
+                    if api_event_id_is_wildcard and evt_type == api_event_type:
+                        log.append(event_dict)
+
+                    elif int(evt_id) == api_event_id and evt_type == api_event_type:
                         log.append(event_dict)
 
                 if done:
@@ -593,7 +601,7 @@ class WindowsAgent:
                 continue
             else:
                 ret.append(i)
-        
+
         return ret
 
     def get_total_ram(self):
