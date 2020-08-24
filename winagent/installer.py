@@ -68,10 +68,12 @@ class Installer:
     def rand_string(self):
         chars = string.ascii_letters
         return "".join(random.choice(chars) for i in range(35))
-    
+
     def uninstall_salt(self):
         print("Stopping salt-minion service", flush=True)
-        r = subprocess.run(["sc", "stop", "salt-minion"], timeout=45, capture_output=True)
+        r = subprocess.run(
+            ["sc", "stop", "salt-minion"], timeout=45, capture_output=True
+        )
         sleep(15)
 
         # clean up any hung salt python procs
@@ -87,9 +89,11 @@ class Installer:
                 kill_proc(pid)
             except:
                 continue
-        
+
         print("Uninstalling existing salt-minion", flush=True)
-        r = subprocess.run(["c:\\salt\\uninst.exe", "/S"], timeout=120, capture_output=True)
+        r = subprocess.run(
+            ["c:\\salt\\uninst.exe", "/S"], timeout=120, capture_output=True
+        )
         sleep(20)
 
         try:
@@ -98,7 +102,7 @@ class Installer:
             os.system('rmdir /S /Q "{}"'.format("C:\\salt"))
         except Exception:
             pass
-        
+
         print("Salt was removed", flush=True)
 
     def install(self):
@@ -108,8 +112,14 @@ class Installer:
         except psutil.NoSuchProcess:
             pass
         else:
-            print("Found tacticalagent service. Please uninstall the existing Tactical Agent first before reinstalling.", flush=True)
-            print("If you're trying to perform an upgrade, do so from the RMM web interface.", flush=True)
+            print(
+                "Found tacticalagent service. Please uninstall the existing Tactical Agent first before reinstalling.",
+                flush=True,
+            )
+            print(
+                "If you're trying to perform an upgrade, do so from the RMM web interface.",
+                flush=True,
+            )
             sys.exit(1)
 
         # generate the agent id
@@ -431,7 +441,7 @@ class Installer:
         else:
             print("Found existing salt-minion. Removing", flush=True)
             self.uninstall_salt()
-        
+
         print("Installing the salt-minion, this might take a while...", flush=True)
 
         salt_cmd = [
