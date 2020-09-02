@@ -97,29 +97,22 @@ class WindowsAgent:
             shell = data["script"]["shell"]
             timeout = data["timeout"]
             script_filename = data["script"]["filename"]
+            args = []
 
-            if shell == "python":
-                cmd = [
-                    self.salt_call,
-                    "win_agent.run_python_script",
-                    script_filename,
-                    f"timeout={timeout}",
-                ]
-                try:
-                    script_type = data["script"]["script_type"]
-                except KeyError:
-                    pass
-                else:
-                    cmd.append(f"script_type={script_type}")
+            try:
+                args = data["script_args"]
+            except KeyError:
+                pass
 
-            else:
-                cmd = [
-                    self.salt_call,
-                    "cmd.script",
-                    script_path,
-                    f"shell={shell}",
-                    f"timeout={timeout}",
-                ]
+            cmd = [
+                self.salt_call,
+                "win_agent.run_script",
+                f"filepath={script_path}",
+                f"filename={script_filename}",
+                f"shell={shell}",
+                f"timeout={timeout}",
+                f"args={args}",
+            ]
 
             self.logger.debug(cmd)
             start = perf_counter()
@@ -169,7 +162,7 @@ class WindowsAgent:
                 "stderr": stderr,
                 "status": status,
                 "retcode": retcode,
-                "execution_time": "{:.4f}".format(round(stop - start)),
+                "execution_time": "{:.4f}".format(stop - start),
             }
 
             self.logger.debug(payload)
@@ -204,7 +197,9 @@ class WindowsAgent:
         try:
             cmd = ["ping", data["ip"]]
             r = await asyncio.create_subprocess_exec(
-                *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
             )
 
             stdout, stderr = await r.communicate()
@@ -372,7 +367,9 @@ class WindowsAgent:
 
                     if data["restart_if_stopped"]:
                         ret = self.salt_call_ret_bool(
-                            cmd="service.restart", args=[data["svc_name"]], timeout=60,
+                            cmd="service.restart",
+                            args=[data["svc_name"]],
+                            timeout=60,
                         )
                         # wait a bit to give service time to start before checking status again
                         await asyncio.sleep(10)
