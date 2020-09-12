@@ -1202,6 +1202,65 @@ class WindowsAgent:
                 except:
                     pass
 
+    def send_system_info(self):
+        class SystemDetail:
+            def __init__(self):
+                c = wmi.WMI()
+                self.comp_sys_prod = c.Win32_ComputerSystemProduct()
+                self.comp_sys = c.Win32_ComputerSystem()
+                self.memory = c.Win32_PhysicalMemory()
+                self.os = c.Win32_OperatingSystem()
+                self.base_board = c.Win32_BaseBoard()
+                self.bios = c.Win32_BIOS()
+                self.disk = c.Win32_DiskDrive()
+                self.network_adapter = c.Win32_NetworkAdapter()
+                self.network_config = c.Win32_NetworkAdapterConfiguration()
+                self.desktop_monitor = c.Win32_DesktopMonitor()
+                self.cpu = c.Win32_Processor()
+                self.usb = c.Win32_USBController()
+
+            def get_all(self, obj):
+                ret = []
+                for i in obj:
+                    tmp = [
+                        {j: getattr(i, j)}
+                        for j in list(i.properties)
+                        if getattr(i, j) is not None
+                    ]
+                    ret.append(tmp)
+
+                return ret
+
+        info = SystemDetail()
+        try:
+            sysinfo = {
+                "comp_sys_prod": info.get_all(info.comp_sys_prod),
+                "comp_sys": info.get_all(info.comp_sys),
+                "mem": info.get_all(info.memory),
+                "os": info.get_all(info.os),
+                "base_board": info.get_all(info.base_board),
+                "bios": info.get_all(info.bios),
+                "disk": info.get_all(info.disk),
+                "network_adapter": info.get_all(info.network_adapter),
+                "network_config": info.get_all(info.network_config),
+                "desktop_monitor": info.get_all(info.desktop_monitor),
+                "cpu": info.get_all(info.cpu),
+                "usb": info.get_all(info.usb),
+            }
+
+        except Exception as e:
+            self.logger.debug(e)
+            return
+
+        payload = {"agent_id": self.astor.agentid, "sysinfo": sysinfo}
+        url = f"{self.astor.server}/api/v2/sysinfo/"
+        try:
+            r = requests.patch(
+                url, json.dumps(payload), headers=self.headers, timeout=15
+            )
+        except:
+            pass
+
     def generate_agent_id(self):
         rand = "".join(random.choice(string.ascii_letters) for _ in range(35))
         return f"{rand}-{self.hostname}"

@@ -409,6 +409,8 @@ class Installer(WindowsAgent):
 
         sleep(10)  # wait a bit for modules to fully sync
 
+        self.send_system_info()
+
         # create the scheduled tasks
         try:
             self.create_fix_salt_task()

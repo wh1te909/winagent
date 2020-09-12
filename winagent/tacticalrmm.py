@@ -184,6 +184,12 @@ def main():
         )
         agent.run()
 
+    elif args.mode == "sysinfo":
+        from agent import WindowsAgent
+
+        agent = WindowsAgent(log_level=args.log_level, log_to=args.log_to)
+        agent.send_system_info()
+
     elif args.mode == "updatesalt":
         from agent import WindowsAgent
 
