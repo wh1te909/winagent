@@ -1,4 +1,5 @@
 import os
+import platform
 import sys
 from unittest import mock
 
@@ -66,3 +67,23 @@ def test_public_ip(agent):
 
 def test_platform_release(agent):
     assert "windows" in agent.get_platform_release().lower()
+
+
+def test_arch(agent):
+    agent.programdir = "C:\\Program Files\\TacticalAgent"
+
+    if platform.machine().lower() == "amd64":
+        agent.arch = "64"
+        assert (
+            agent.salt_minion_exe
+            == "https://github.com/wh1te909/winagent/raw/master/bin/salt-minion-setup.exe"
+        )
+        assert agent.nssm == "C:\\Program Files\\TacticalAgent\\nssm.exe"
+
+    if platform.machine().lower() == "x86":
+        agent.arch = "32"
+        assert (
+            agent.salt_minion_exe
+            == "https://github.com/wh1te909/winagent/raw/master/bin/salt-minion-setup-x86.exe"
+        )
+        assert agent.nssm == "C:\\Program Files\\TacticalAgent\\nssm-x86.exe"

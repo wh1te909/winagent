@@ -44,32 +44,11 @@ def main():
         default="file",
         choices=["file", "stdout"],
     )
-    parser.add_argument(
-        "--power",
-        action="store",
-        dest="power",
-        type=int,
-        default=0,
-        choices=[0, 1],
-    )
-    parser.add_argument(
-        "--rdp",
-        action="store",
-        dest="rdp",
-        type=int,
-        default=0,
-        choices=[0, 1],
-    )
-    parser.add_argument(
-        "--ping",
-        action="store",
-        dest="ping",
-        type=int,
-        default=0,
-        choices=[0, 1],
-    )
     parser.add_argument("--auth", action="store", dest="auth_token", type=str)
     parser.add_argument("--version", action="store_true")
+    parser.add_argument("--power", action="store_true")
+    parser.add_argument("--rdp", action="store_true")
+    parser.add_argument("--ping", action="store_true")
     parser.add_argument(
         "--local-salt",
         action="store",

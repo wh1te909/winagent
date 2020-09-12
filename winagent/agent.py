@@ -5,9 +5,11 @@ import logging
 import math
 import os
 import platform
+import random
 import shutil
 import signal
 import socket
+import string
 import subprocess
 import sys
 from collections import defaultdict
@@ -29,9 +31,11 @@ from utils import (
     get_os_version_info,
     get_windows_os_release_grain,
     kill_proc,
+    remove_dir,
 )
 
-db = peewee.SqliteDatabase("C:\\Program Files\\TacticalAgent\\agentdb.db")
+db_path = os.path.join(os.environ["ProgramFiles"], "TacticalAgent", "agentdb.db")
+db = peewee.SqliteDatabase(db_path)
 
 
 class AgentStorage(peewee.Model):
@@ -53,20 +57,50 @@ class WindowsAgent:
         self.log_to = log_to
         self.hostname = socket.gethostname()
         self.platform = platform.system().lower()
-        self.astor = self.get_db()
-        self.programdir = "C:\\Program Files\\TacticalAgent"
+        self.arch = "64" if platform.machine().endswith("64") else "32"
+        self.load_db()
+        self.programdir = os.path.join(os.environ["ProgramFiles"], "TacticalAgent")
         self.exe = os.path.join(self.programdir, "tacticalrmm.exe")
-        self.nssm = os.path.join(self.programdir, "nssm.exe")
-        self.salt_call = "C:\\salt\\salt-call.bat"
-        self.headers = {
-            "content-type": "application/json",
-            "Authorization": f"Token {self.astor.token}",
-        }
-        self.salt_minion_exe = (
-            "https://github.com/wh1te909/winagent/raw/master/bin/salt-minion-setup.exe"
-        )
+        self.system_drive = os.environ["SystemDrive"]
+        self.salt_call = os.path.join(self.system_drive, "\\salt\\salt-call.bat")
         self.setup_logging()
         self.version = self.get_agent_version()
+
+    @property
+    def salt_minion_exe(self):
+        if self.arch == "64":
+            return "https://github.com/wh1te909/winagent/raw/master/bin/salt-minion-setup.exe"
+        else:
+            return "https://github.com/wh1te909/winagent/raw/master/bin/salt-minion-setup-x86.exe"
+
+    @property
+    def salt_installer(self):
+        if self.arch == "64":
+            return "salt-minion-setup.exe"
+        else:
+            return "salt-minion-setup-x86.exe"
+
+    @property
+    def mesh_installer(self):
+        if self.arch == "64":
+            return "meshagent.exe"
+        else:
+            return "meshagent-x86.exe"
+
+    @property
+    def nssm(self):
+        if self.arch == "64":
+            return os.path.join(self.programdir, "nssm.exe")
+        else:
+            return os.path.join(self.programdir, "nssm-x86.exe")
+
+    def load_db(self):
+        if os.path.exists(db_path):
+            self.astor = self.get_db()
+            self.headers = {
+                "content-type": "application/json",
+                "Authorization": f"Token {self.astor.token}",
+            }
 
     def get_agent_version(self):
         try:
@@ -795,7 +829,7 @@ class WindowsAgent:
                 self.logger.error("Unable to download salt-minion. Aborting")
                 return False
 
-            minion_file = os.path.join(self.programdir, "salt-minion-setup.exe")
+            minion_file = os.path.join(self.programdir, self.salt_installer)
             if os.path.exists(minion_file):
                 os.remove(minion_file)
 
@@ -813,7 +847,7 @@ class WindowsAgent:
 
             r = subprocess.run(
                 [
-                    "salt-minion-setup.exe",
+                    self.salt_installer,
                     "/S",
                     "/custom-config=saltcustom",
                     f"/master={self.astor.salt_master}",
@@ -918,14 +952,7 @@ class WindowsAgent:
 
     def cleanup(self):
         self.cleanup_tasks()
-
-        if os.path.exists("C:\\salt"):
-            try:
-                shutil.rmtree("C:\\salt")
-                sleep(1)
-                os.system('rmdir /S /Q "{}"'.format("C:\\salt"))
-            except Exception:
-                pass
+        remove_dir(os.path.join(self.system_drive, "\\salt"))
 
     def fix_salt(self, by_time=True):
         """
@@ -1105,6 +1132,58 @@ class WindowsAgent:
                     self.salt_call_ret_bool("task.delete_task", args=[task])
                 except:
                     pass
+
+    def generate_agent_id(self):
+        rand = "".join(random.choice(string.ascii_letters) for _ in range(35))
+        return f"{rand}-{self.hostname}"
+
+    def uninstall_salt(self):
+        print("Stopping salt-minion service", flush=True)
+        r = subprocess.run(
+            ["sc", "stop", "salt-minion"], timeout=45, capture_output=True
+        )
+
+        attempts = 0
+        retries = 20
+        while 1:
+            status = psutil.win_service_get("salt-minion").status()
+            if status != "stopped":
+                self.logger.debug("Stopping...")
+                sys.stdout.flush()
+                attempts += 1
+                sleep(5)
+            else:
+                attempts = 0
+
+            if attempts == 0 or attempts >= retries:
+                break
+
+        # clean up any hung salt python procs
+        pids = []
+        for proc in psutil.process_iter():
+            with proc.oneshot():
+                if proc.name().lower() == "python.exe" and "salt" in proc.exe():
+                    pids.append(proc.pid)
+
+        for pid in pids:
+            cmdline = psutil.Process(pid).cmdline()
+            self.logger.debug(cmdline)
+            self.logger.debug(f"Killing salt process with pid {pid}")
+            sys.stdout.flush()
+            try:
+                kill_proc(pid)
+            except:
+                continue
+
+        print("Uninstalling existing salt-minion", flush=True)
+        salt_uninst = os.path.join(self.system_drive, "\\salt\\uninst.exe")
+        r = subprocess.run(
+            [salt_uninst, "/S"], shell=True, timeout=120, capture_output=True
+        )
+        sleep(30)
+
+        remove_dir(os.path.join(self.system_drive, "\\salt"))
+        print("Salt was removed", flush=True)
 
 
 def show_agent_status(window, gui):
