@@ -67,7 +67,9 @@ def main():
 
     if args.version:
         try:
-            with open(os.path.join("C:\\Program Files\\TacticalAgent", "VERSION")) as f:
+            with open(
+                os.path.join(os.environ["ProgramFiles"], "TacticalAgent", "VERSION")
+            ) as f:
                 ver = f.read().strip()
 
             print(ver)

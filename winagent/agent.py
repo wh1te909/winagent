@@ -799,10 +799,30 @@ class WindowsAgent:
         else:
             return ver
 
+    def wait_for_service(self, svc, status, retries=10):
+        attempts = 0
+
+        while 1:
+            try:
+                service = psutil.win_service_get(svc)
+            except psutil.NoSuchProcess:
+                attempts += 1
+                sleep(5)
+            else:
+                stat = service.status()
+                if stat != status:
+                    attempts += 1
+                    sleep(5)
+                else:
+                    attempts = 0
+
+            if attempts == 0 or attempts >= retries:
+                break
+
     def update_salt(self):
         try:
-            salt_info = f"{self.astor.server}/api/v1/{self.astor.agentpk}/saltinfo/"
-            r = requests.get(salt_info, headers=self.headers, timeout=15)
+            get = f"{self.astor.server}/api/v2/{self.astor.agentid}/saltminion/"
+            r = requests.get(get, headers=self.headers, timeout=15)
             if r.status_code != 200:
                 return
 
@@ -824,7 +844,14 @@ class WindowsAgent:
 
             self.logger.info("Updating salt")
 
-            get_minion = requests.get(self.salt_minion_exe, stream=True, timeout=900)
+            try:
+                get_minion = requests.get(
+                    self.salt_minion_exe, stream=True, timeout=900
+                )
+            except Exception as e:
+                self.logger.error(e)
+                return
+
             if get_minion.status_code != 200:
                 self.logger.error("Unable to download salt-minion. Aborting")
                 return False
@@ -841,34 +868,45 @@ class WindowsAgent:
 
             del get_minion
 
-            p_stop = subprocess.run(
+            subprocess.run(
                 [self.nssm, "stop", "checkrunner"], capture_output=True, timeout=60
             )
 
-            r = subprocess.run(
-                [
-                    self.salt_installer,
-                    "/S",
-                    "/custom-config=saltcustom",
-                    f"/master={self.astor.salt_master}",
-                    f"/minion-name={salt_id}",
-                    "/start-minion=1",
-                ],
-                cwd=self.programdir,
-                capture_output=True,
-                shell=True,
-                timeout=30,
-            )
-            sleep(60)
+            salt_cmd = [
+                self.salt_installer,
+                "/S",
+                "/custom-config=saltcustom",
+                f"/master={self.astor.salt_master}",
+                f"/minion-name={salt_id}",
+                "/start-minion=1",
+            ]
 
-            p_start = subprocess.run(
+            try:
+                r = subprocess.run(
+                    salt_cmd,
+                    cwd=self.programdir,
+                    capture_output=True,
+                    shell=True,
+                    timeout=300,
+                )
+            except Exception as e:
+                self.logger.error(e)
+                subprocess.run(
+                    [self.nssm, "start", "checkrunner"], capture_output=True, timeout=60
+                )
+                return
+
+            sleep(45)
+
+            self.wait_for_service(svc="salt-minion", status="running")
+
+            subprocess.run(
                 [self.nssm, "start", "checkrunner"], capture_output=True, timeout=60
             )
 
-            payload = {"ver": latest_ver}
-            r = requests.patch(
-                salt_info, json.dumps(payload), headers=self.headers, timeout=30
-            )
+            put = f"{self.astor.server}/api/v2/saltminion/"
+            payload = {"ver": latest_ver, "agent_id": self.astor.agentid}
+            r = requests.put(put, json.dumps(payload), headers=self.headers, timeout=30)
 
             self.logger.info(f"Salt was updated from {installed_ver} to {latest_ver}")
         except Exception as e:
@@ -876,11 +914,11 @@ class WindowsAgent:
 
     def recover_salt(self):
         try:
-            ssm = os.path.join("C:\\salt\\bin", "ssm.exe")
+            ssm = os.path.join(self.system_drive, "\\salt", "bin", "ssm.exe")
             r = subprocess.run(
                 [ssm, "stop", "salt-minion"], capture_output=True, timeout=30
             )
-            sleep(10)
+            self.wait_for_service(svc="salt-minion", status="stopped", retries=15)
             self.fix_salt(by_time=False)
             r = subprocess.run(
                 ["ipconfig", "/flushdns"], capture_output=True, timeout=30
@@ -893,7 +931,7 @@ class WindowsAgent:
 
     def recover_mesh(self):
         self._mesh_service_action("stop")
-        sleep(5)
+        self.wait_for_service(svc="mesh agent", status="stopped", retries=3)
         pids = [
             proc.info
             for proc in psutil.process_iter(attrs=["pid", "name"])
@@ -903,8 +941,9 @@ class WindowsAgent:
         for pid in pids:
             kill_proc(pid["pid"])
 
-        mesh1 = os.path.join("C:\\Program Files\\Mesh Agent", "MeshAgent.exe")
-        mesh2 = os.path.join(self.programdir, "meshagent.exe")
+        
+        mesh1 = os.path.join(os.environ["ProgramFiles"], "Mesh Agent", "MeshAgent.exe")
+        mesh2 = os.path.join(self.programdir, self.mesh_installer)
         if os.path.exists(mesh1):
             exe = mesh1
         else:
