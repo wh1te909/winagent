@@ -188,7 +188,6 @@ def main():
         from agent import WindowsAgent
 
         agent = WindowsAgent(log_level=args.log_level, log_to=args.log_to)
-        agent.fix_salt(by_time=False)
         agent.update_salt()
 
     elif args.mode == "fixsalt":
