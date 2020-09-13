@@ -163,7 +163,7 @@ class Installer(WindowsAgent):
                 sys.exit(1)
 
             if r.status_code != 200:
-                self.logger.error(r.text)
+                self.logger.error(r.json())
                 sys.stdout.flush()
                 sys.exit(1)
 
@@ -198,7 +198,7 @@ class Installer(WindowsAgent):
             sys.exit(1)
 
         if r.status_code != 200:
-            self.logger.error(r.text)
+            self.logger.error(r.json())
             sys.stdout.flush()
             sys.exit(1)
 
@@ -243,7 +243,7 @@ class Installer(WindowsAgent):
             sys.exit(1)
 
         if r.status_code != 200:
-            self.logger.error(r.text)
+            self.logger.error(r.json())
             sys.stdout.flush()
             sys.exit(1)
 
@@ -350,14 +350,14 @@ class Installer(WindowsAgent):
             else:
                 if r.status_code != 200:
                     accept_attempts += 1
-                    self.logger.debug(r.text)
+                    self.logger.debug(r.json())
                     sys.stdout.flush()
                     sleep(5)
                 else:
                     accept_attempts = 0
 
             if accept_attempts == 0:
-                self.logger.debug(r.text)
+                self.logger.debug(r.json())
                 sys.stdout.flush()
                 break
             elif accept_attempts >= salt_retries:
@@ -391,14 +391,14 @@ class Installer(WindowsAgent):
             else:
                 if r.status_code != 200:
                     sync_attempts += 1
-                    self.logger.debug(r.text)
+                    self.logger.debug(r.json())
                     sys.stdout.flush()
                     sleep(5)
                 else:
                     sync_attempts = 0
 
             if sync_attempts == 0:
-                self.logger.debug(r.text)
+                self.logger.debug(r.json())
                 sys.stdout.flush()
                 break
             elif sync_attempts >= sync_retries:
