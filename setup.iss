@@ -5,7 +5,6 @@
 #define MyAppExeName "tacticalrmm.exe"
 #define NSSM "nssm.exe"
 #define MESHEXE "meshagent.exe"
-#define MESHEXE32 "meshagent-x86.exe"
 #define SALTUNINSTALL "c:\salt\uninst.exe"
 #define SALTDIR "c:\salt"
 
@@ -40,7 +39,6 @@ Source: "C:\Users\Public\Documents\tacticalagent\VERSION"; DestDir: "{app}"; Fla
 Source: "C:\Users\Public\Documents\tacticalagent\winagent\dist\tacticalrmm\tacticalrmm.exe"; DestDir: "{app}"; Flags: ignoreversion;
 Source: "C:\Users\Public\Documents\tacticalagent\winagent\dist\tacticalrmm\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "C:\Users\Public\Documents\tacticalagent\bin\nssm.exe"; DestDir: "{app}"; Flags: ignoreversion;
-Source: "C:\Users\Public\Documents\tacticalagent\bin\nssm-x86.exe"; DestDir: "{app}"; Flags: ignoreversion;
 Source: "C:\Users\Public\Documents\tacticalagent\bin\saltcustom"; DestDir: "{app}"; Flags: ignoreversion;
 Source: "C:\Users\Public\Documents\tacticalagent\bin\onit.ico"; DestDir: "{app}"; Flags: ignoreversion;
 
@@ -57,8 +55,7 @@ Filename: "{app}\{#NSSM}"; Parameters: "stop checkrunner"; RunOnceId: "stopcheck
 Filename: "{app}\{#NSSM}"; Parameters: "remove checkrunner confirm"; RunOnceId: "removecheckrun";
 Filename: "{app}\{#MyAppExeName}"; Parameters: "-m cleanup"; RunOnceId: "cleanuprm";
 Filename: "{#SALTUNINSTALL}"; Parameters: "/S"; RunOnceId: "saltrm";
-Filename: "{app}\{#MESHEXE}"; Parameters: "-fulluninstall"; RunOnceId: "meshrm"; Check: IsWin64;
-Filename: "{app}\{#MESHEXE32}"; Parameters: "-fulluninstall"; RunOnceId: "32rmmesh"; Check: "not IsWin64";
+Filename: "{app}\{#MESHEXE}"; Parameters: "-fulluninstall"; RunOnceId: "meshrm";
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}";
