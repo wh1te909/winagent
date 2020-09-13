@@ -44,17 +44,11 @@ def main():
         default="file",
         choices=["file", "stdout"],
     )
-    parser.add_argument(
-        "--power", action="store", dest="power", type=int, default=0, choices=[0, 1],
-    )
-    parser.add_argument(
-        "--rdp", action="store", dest="rdp", type=int, default=0, choices=[0, 1],
-    )
-    parser.add_argument(
-        "--ping", action="store", dest="ping", type=int, default=0, choices=[0, 1],
-    )
     parser.add_argument("--auth", action="store", dest="auth_token", type=str)
     parser.add_argument("--version", action="store_true")
+    parser.add_argument("--power", action="store_true")
+    parser.add_argument("--rdp", action="store_true")
+    parser.add_argument("--ping", action="store_true")
     parser.add_argument(
         "--local-salt",
         action="store",
@@ -73,7 +67,9 @@ def main():
 
     if args.version:
         try:
-            with open(os.path.join("C:\\Program Files\\TacticalAgent", "VERSION")) as f:
+            with open(
+                os.path.join(os.environ["ProgramFiles"], "TacticalAgent", "VERSION")
+            ) as f:
                 ver = f.read().strip()
 
             print(ver)
@@ -188,11 +184,16 @@ def main():
         )
         agent.run()
 
+    elif args.mode == "sysinfo":
+        from agent import WindowsAgent
+
+        agent = WindowsAgent(log_level=args.log_level, log_to=args.log_to)
+        agent.send_system_info()
+
     elif args.mode == "updatesalt":
         from agent import WindowsAgent
 
         agent = WindowsAgent(log_level=args.log_level, log_to=args.log_to)
-        agent.fix_salt(by_time=False)
         agent.update_salt()
 
     elif args.mode == "fixsalt":

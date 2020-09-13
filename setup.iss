@@ -1,5 +1,5 @@
 #define MyAppName "Tactical RMM Agent"
-#define MyAppVersion "0.10.2"
+#define MyAppVersion "0.11.0"
 #define MyAppPublisher "wh1te909"
 #define MyAppURL "https://github.com/wh1te909"
 #define MyAppExeName "tacticalrmm.exe"
@@ -35,16 +35,15 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-Source: "C:\Users\Public\Documents\tacticalagent\VERSION"; DestDir: "{app}";
-Source: "C:\Users\Public\Documents\tacticalagent\winagent\dist\tacticalrmm\tacticalrmm.exe"; DestDir: "{app}";
-Source: "C:\Users\Public\Documents\tacticalagent\winagent\dist\tacticalrmm\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs
-Source: "C:\Users\Public\Documents\tacticalagent\bin\nssm.exe"; DestDir: "{app}";
-Source: "C:\Users\Public\Documents\tacticalagent\bin\saltcustom"; DestDir: "{app}";
-Source: "C:\Users\Public\Documents\tacticalagent\bin\onit.ico"; DestDir: "{app}";
+Source: "C:\Users\Public\Documents\tacticalagent\VERSION"; DestDir: "{app}"; Flags: ignoreversion;
+Source: "C:\Users\Public\Documents\tacticalagent\winagent\dist\tacticalrmm\tacticalrmm.exe"; DestDir: "{app}"; Flags: ignoreversion;
+Source: "C:\Users\Public\Documents\tacticalagent\winagent\dist\tacticalrmm\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "C:\Users\Public\Documents\tacticalagent\bin\nssm.exe"; DestDir: "{app}"; Flags: ignoreversion;
+Source: "C:\Users\Public\Documents\tacticalagent\bin\saltcustom"; DestDir: "{app}"; Flags: ignoreversion;
+Source: "C:\Users\Public\Documents\tacticalagent\bin\onit.ico"; DestDir: "{app}"; Flags: ignoreversion;
 
 [Icons]
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
-Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent runascurrentuser

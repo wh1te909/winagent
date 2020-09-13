@@ -40,37 +40,27 @@ class TaskRunner(WindowsAgent):
             return resp.json()
 
     async def run_task(self, data):
-
         try:
-            script = data["script"]
+            script_path = data["script"]["filepath"]
+            shell = data["script"]["shell"]
             timeout = data["timeout"]
-        except Exception as e:
-            self.logger.debug(e)
-            return False
+            script_filename = data["script"]["filename"]
+            args = []
 
-        try:
-            if script["shell"] == "python":
-                cmd = [
-                    self.salt_call,
-                    "win_agent.run_python_script",
-                    script["filename"],
-                    f"timeout={timeout}",
-                ]
+            try:
+                args = data["script_args"]
+            except KeyError:
+                pass
 
-                try:
-                    script_type = script["script_type"]
-                except KeyError:
-                    pass
-                else:
-                    cmd.append(f"script_type={script_type}")
-            else:
-                cmd = [
-                    self.salt_call,
-                    "cmd.script",
-                    script["filepath"],
-                    f"shell={script['shell']}",
-                    f"timeout={timeout}",
-                ]
+            cmd = [
+                self.salt_call,
+                "win_agent.run_script",
+                f"filepath={script_path}",
+                f"filename={script_filename}",
+                f"shell={shell}",
+                f"timeout={timeout}",
+                f"args={args}",
+            ]
 
             self.logger.debug(cmd)
             start = perf_counter()
@@ -114,12 +104,15 @@ class TaskRunner(WindowsAgent):
                 "stdout": stdout,
                 "stderr": stderr,
                 "retcode": retcode,
-                "execution_time": "{:.4f}".format(round(stop - start)),
+                "execution_time": "{:.4f}".format(stop - start),
             }
             self.logger.debug(payload)
 
             resp = requests.patch(
-                self.task_url, json.dumps(payload), headers=self.headers, timeout=15,
+                self.task_url,
+                json.dumps(payload),
+                headers=self.headers,
+                timeout=15,
             )
 
         except Exception as e:

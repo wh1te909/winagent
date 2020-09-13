@@ -10,13 +10,10 @@ from agent import WindowsAgent
 class WinAgentSvc(WindowsAgent):
     def __init__(self, log_level, log_to):
         super().__init__(log_level, log_to)
-        self.update_url = f"{self.astor.server}/api/v1/update/"
-        self.hello_url = f"{self.astor.server}/api/v1/hello/"
+        self.hello = f"{self.astor.server}/api/v2/hello/"
 
     def run(self):
         self.logger.info("Agent service started.")
-        # wait a bit before starting otherwise boot_time will be inaccurate
-        sleep(randrange(start=10, stop=20))
         try:
             info = {
                 "agent_id": self.astor.agentid,
@@ -36,8 +33,8 @@ class WinAgentSvc(WindowsAgent):
 
             self.logger.debug(info)
 
-            r = requests.patch(
-                self.update_url, json.dumps(info), headers=self.headers, timeout=30
+            r = requests.post(
+                self.hello, json.dumps(info), headers=self.headers, timeout=30
             )
         except Exception as e:
             self.logger.debug(e)
@@ -60,7 +57,7 @@ class WinAgentSvc(WindowsAgent):
                 self.logger.debug(payload)
 
                 r = requests.patch(
-                    self.hello_url,
+                    self.hello,
                     json.dumps(payload),
                     headers=self.headers,
                     timeout=30,

@@ -10,13 +10,13 @@ from agent import WindowsAgent
 class CheckRunner(WindowsAgent):
     def __init__(self, log_level, log_to):
         super().__init__(log_level, log_to)
-        self.checkrunner_url = (
-            f"{self.astor.server}/api/v1/{self.astor.agentpk}/checkrunner/"
+        self.checkrunner = (
+            f"{self.astor.server}/api/v2/{self.astor.agentid}/checkrunner/"
         )
 
     def get_checks(self):
         try:
-            resp = requests.get(self.checkrunner_url, headers=self.headers, timeout=15)
+            resp = requests.get(self.checkrunner, headers=self.headers, timeout=15)
         except Exception as e:
             self.logger.debug(e)
             return False

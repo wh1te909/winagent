@@ -16,7 +16,7 @@ git clone https://github.com/wh1te909/winagent.git .
 python -m venv env
 .\env\Scripts\Activate.ps1
 python -m pip install --upgrade pip
-pip install --upgrade setuptools wheel
+pip install --upgrade setuptools==49.6.0 wheel==0.35.1
 pip install --no-cache-dir -r requirements.txt
 python .\env\Scripts\pywin32_postinstall.py -install
 .\build.ps1

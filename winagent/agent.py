@@ -1,15 +1,19 @@
 import asyncio
+import base64
 import datetime as dt
 import json
 import logging
 import math
 import os
 import platform
+import random
 import shutil
 import signal
 import socket
+import string
 import subprocess
 import sys
+import zlib
 from collections import defaultdict
 from time import perf_counter, sleep
 
@@ -29,9 +33,11 @@ from utils import (
     get_os_version_info,
     get_windows_os_release_grain,
     kill_proc,
+    remove_dir,
 )
 
-db = peewee.SqliteDatabase("C:\\Program Files\\TacticalAgent\\agentdb.db")
+db_path = os.path.join(os.environ["ProgramFiles"], "TacticalAgent", "agentdb.db")
+db = peewee.SqliteDatabase(db_path)
 
 
 class AgentStorage(peewee.Model):
@@ -53,20 +59,50 @@ class WindowsAgent:
         self.log_to = log_to
         self.hostname = socket.gethostname()
         self.platform = platform.system().lower()
-        self.astor = self.get_db()
-        self.programdir = "C:\\Program Files\\TacticalAgent"
+        self.arch = "64" if platform.machine().endswith("64") else "32"
+        self.load_db()
+        self.programdir = os.path.join(os.environ["ProgramFiles"], "TacticalAgent")
         self.exe = os.path.join(self.programdir, "tacticalrmm.exe")
-        self.nssm = os.path.join(self.programdir, "nssm.exe")
-        self.salt_call = "C:\\salt\\salt-call.bat"
-        self.headers = {
-            "content-type": "application/json",
-            "Authorization": f"Token {self.astor.token}",
-        }
-        self.salt_minion_exe = (
-            "https://github.com/wh1te909/winagent/raw/master/bin/salt-minion-setup.exe"
-        )
+        self.system_drive = os.environ["SystemDrive"]
+        self.salt_call = os.path.join(self.system_drive, "\\salt\\salt-call.bat")
         self.setup_logging()
         self.version = self.get_agent_version()
+
+    @property
+    def salt_minion_exe(self):
+        if self.arch == "64":
+            return "https://github.com/wh1te909/winagent/raw/master/bin/salt-minion-setup.exe"
+        else:
+            return "https://github.com/wh1te909/winagent/raw/master/bin/salt-minion-setup-x86.exe"
+
+    @property
+    def salt_installer(self):
+        if self.arch == "64":
+            return "salt-minion-setup.exe"
+        else:
+            return "salt-minion-setup-x86.exe"
+
+    @property
+    def mesh_installer(self):
+        if self.arch == "64":
+            return "meshagent.exe"
+        else:
+            return "meshagent-x86.exe"
+
+    @property
+    def nssm(self):
+        if self.arch == "64":
+            return os.path.join(self.programdir, "nssm.exe")
+        else:
+            return os.path.join(self.programdir, "nssm-x86.exe")
+
+    def load_db(self):
+        if os.path.exists(db_path):
+            self.astor = self.get_db()
+            self.headers = {
+                "content-type": "application/json",
+                "Authorization": f"Token {self.astor.token}",
+            }
 
     def get_agent_version(self):
         try:
@@ -91,35 +127,27 @@ class WindowsAgent:
         self.logger = logging.getLogger(__name__)
 
     async def script_check(self, data):
-
         try:
             script_path = data["script"]["filepath"]
             shell = data["script"]["shell"]
             timeout = data["timeout"]
             script_filename = data["script"]["filename"]
+            args = []
 
-            if shell == "python":
-                cmd = [
-                    self.salt_call,
-                    "win_agent.run_python_script",
-                    script_filename,
-                    f"timeout={timeout}",
-                ]
-                try:
-                    script_type = data["script"]["script_type"]
-                except KeyError:
-                    pass
-                else:
-                    cmd.append(f"script_type={script_type}")
+            try:
+                args = data["script_args"]
+            except KeyError:
+                pass
 
-            else:
-                cmd = [
-                    self.salt_call,
-                    "cmd.script",
-                    script_path,
-                    f"shell={shell}",
-                    f"timeout={timeout}",
-                ]
+            cmd = [
+                self.salt_call,
+                "win_agent.run_script",
+                f"filepath={script_path}",
+                f"filename={script_filename}",
+                f"shell={shell}",
+                f"timeout={timeout}",
+                f"args={args}",
+            ]
 
             self.logger.debug(cmd)
             start = perf_counter()
@@ -159,43 +187,39 @@ class WindowsAgent:
                 stdout = ""
                 stderr = proc_stderr.decode("utf-8", errors="ignore")
 
-            if retcode != 0:
-                status = "failing"
-            else:
-                status = "passing"
-
             payload = {
+                "id": data["id"],
                 "stdout": stdout,
                 "stderr": stderr,
-                "status": status,
                 "retcode": retcode,
-                "execution_time": "{:.4f}".format(round(stop - start)),
+                "stop": stop,
+                "start": start,
             }
-
             self.logger.debug(payload)
 
-            resp = requests.patch(
-                f"{self.astor.server}/api/v1/{data['id']}/checkrunner/",
+            status = requests.patch(
+                f"{self.astor.server}/api/v2/checkrunner/",
                 json.dumps(payload),
                 headers=self.headers,
                 timeout=15,
-            )
+            ).json()
 
-            if (
-                status == "failing"
-                and data["assigned_task"]
-                and data["assigned_task"]["enabled"]
-            ):
-                from taskrunner import TaskRunner
+            if status == "failing" and data["assigned_tasks"]:
+                self.logger.debug(data["assigned_tasks"])
+                for task in data["assigned_tasks"]:
+                    if task["enabled"]:
+                        from taskrunner import TaskRunner
 
-                task = TaskRunner(
-                    task_pk=data["assigned_task"]["id"],
-                    log_level=self.log_level,
-                    log_to=self.log_to,
-                )
-                await task.run_while_in_event_loop()
+                        self.logger.debug(task)
+                        t = TaskRunner(
+                            task_pk=task["id"],
+                            log_level=self.log_level,
+                            log_to=self.log_to,
+                        )
+                        await t.run_while_in_event_loop()
 
             return status
+
         except Exception as e:
             self.logger.debug(e)
             return "failing"
@@ -204,53 +228,55 @@ class WindowsAgent:
         try:
             cmd = ["ping", data["ip"]]
             r = await asyncio.create_subprocess_exec(
-                *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
             )
 
             stdout, stderr = await r.communicate()
 
-            success = ["Reply", "bytes", "time", "TTL"]
+            has_stdout, has_stderr = False, False
 
             if stdout:
+                has_stdout = True
                 output = stdout.decode("utf-8", errors="ignore")
-                if all(x in output for x in success):
-                    status = "passing"
-                else:
-                    status = "failing"
-
             elif stderr:
-                status = "failing"
+                has_stderr = True
                 output = stderr.decode("utf-8", errors="ignore")
 
             payload = {
-                "status": status,
-                "more_info": output,
+                "id": data["id"],
+                "has_stdout": has_stdout,
+                "has_stderr": has_stderr,
+                "output": output,
             }
 
             self.logger.debug(payload)
 
-            resp = requests.patch(
-                f"{self.astor.server}/api/v1/{data['id']}/checkrunner/",
+            status = requests.patch(
+                f"{self.astor.server}/api/v2/checkrunner/",
                 json.dumps(payload),
                 headers=self.headers,
                 timeout=15,
-            )
+            ).json()
+            self.logger.debug(status)
 
-            if (
-                status == "failing"
-                and data["assigned_task"]
-                and data["assigned_task"]["enabled"]
-            ):
-                from taskrunner import TaskRunner
+            if status == "failing" and data["assigned_tasks"]:
+                self.logger.debug(data["assigned_tasks"])
+                for task in data["assigned_tasks"]:
+                    if task["enabled"]:
+                        from taskrunner import TaskRunner
 
-                task = TaskRunner(
-                    task_pk=data["assigned_task"]["id"],
-                    log_level=self.log_level,
-                    log_to=self.log_to,
-                )
-                await task.run_while_in_event_loop()
+                        self.logger.debug(task)
+                        t = TaskRunner(
+                            task_pk=task["id"],
+                            log_level=self.log_level,
+                            log_to=self.log_to,
+                        )
+                        await t.run_while_in_event_loop()
 
             return status
+
         except Exception as e:
             self.logger.debug(e)
             return "failing"
@@ -263,164 +289,153 @@ class WindowsAgent:
             self.logger.error(f"Disk {data['disk']} does not exist")
 
         if exists:
-            percent_used = round(disk.percent)
-            total = bytes2human(disk.total)
-            free = bytes2human(disk.free)
-
-            if (100 - percent_used) < data["threshold"]:
-                status = "failing"
-            else:
-                status = "passing"
-
-            more_info = f"Total: {total}B, Free: {free}B"
+            payload = {
+                "id": data["id"],
+                "percent_used": disk.percent,
+                "total": disk.total,
+                "free": disk.free,
+                "exists": exists,
+            }
         else:
-            status = "failing"
-            more_info = f"Disk {data['disk']} does not exist"
-
-        payload = {
-            "status": status,
-            "more_info": more_info,
-        }
+            payload = {"id": data["id"], "exists": False}
 
         self.logger.debug(payload)
 
-        resp = requests.patch(
-            f"{self.astor.server}/api/v1/{data['id']}/checkrunner/",
+        status = requests.patch(
+            f"{self.astor.server}/api/v2/checkrunner/",
             json.dumps(payload),
             headers=self.headers,
             timeout=15,
-        )
+        ).json()
+        self.logger.debug(status)
 
-        if (
-            status == "failing"
-            and data["assigned_task"]
-            and data["assigned_task"]["enabled"]
-        ):
-            from taskrunner import TaskRunner
+        if status == "failing" and data["assigned_tasks"]:
+            self.logger.debug(data["assigned_tasks"])
+            for task in data["assigned_tasks"]:
+                if task["enabled"]:
+                    from taskrunner import TaskRunner
 
-            task = TaskRunner(
-                task_pk=data["assigned_task"]["id"],
-                log_level=self.log_level,
-                log_to=self.log_to,
-            )
-            await task.run_while_in_event_loop()
+                    self.logger.debug(task)
+                    t = TaskRunner(
+                        task_pk=task["id"],
+                        log_level=self.log_level,
+                        log_to=self.log_to,
+                    )
+                    await t.run_while_in_event_loop()
 
         return status
 
-    async def cpu_load_check(self, data):
+    async def cpu_load_check(self, data, interval=7):
+        try:
+            interval = int(data["interval"])
+        except:
+            pass
+
         try:
             psutil.cpu_percent(interval=0)
-            await asyncio.sleep(5)
+            await asyncio.sleep(interval)
             cpu_load = round(psutil.cpu_percent(interval=0))
 
-            payload = {"percent": cpu_load}
+            payload = {"percent": cpu_load, "id": data["id"]}
+            self.logger.debug(payload)
 
-            resp = requests.patch(
-                f"{self.astor.server}/api/v1/{data['id']}/checkrunner/",
+            status = requests.patch(
+                f"{self.astor.server}/api/v2/checkrunner/",
                 json.dumps(payload),
                 headers=self.headers,
                 timeout=15,
-            )
+            ).json()
+            self.logger.debug(status)
 
-            return "ok"
+            if status == "failing" and data["assigned_tasks"]:
+                self.logger.debug(data["assigned_tasks"])
+                for task in data["assigned_tasks"]:
+                    if task["enabled"]:
+                        from taskrunner import TaskRunner
+
+                        self.logger.debug(task)
+                        t = TaskRunner(
+                            task_pk=task["id"],
+                            log_level=self.log_level,
+                            log_to=self.log_to,
+                        )
+                        await t.run_while_in_event_loop()
+
+            return status
+
         except Exception as e:
             self.logger.debug(e)
             return False
 
     async def mem_check(self, data):
         try:
+            payload = {"percent": self.get_used_ram(), "id": data["id"]}
+            self.logger.debug(payload)
 
-            payload = {"percent": self.get_used_ram()}
-
-            resp = requests.patch(
-                f"{self.astor.server}/api/v1/{data['id']}/checkrunner/",
+            status = requests.patch(
+                f"{self.astor.server}/api/v2/checkrunner/",
                 json.dumps(payload),
                 headers=self.headers,
                 timeout=15,
-            )
+            ).json()
+            self.logger.debug(status)
 
-            return "ok"
+            if status == "failing" and data["assigned_tasks"]:
+                self.logger.debug(data["assigned_tasks"])
+                for task in data["assigned_tasks"]:
+                    if task["enabled"]:
+                        from taskrunner import TaskRunner
+
+                        self.logger.debug(task)
+                        t = TaskRunner(
+                            task_pk=task["id"],
+                            log_level=self.log_level,
+                            log_to=self.log_to,
+                        )
+                        await t.run_while_in_event_loop()
+
+            return status
+
         except Exception as e:
             self.logger.debug(e)
             return False
 
     async def win_service_check(self, data, exists=True):
         try:
-            services = self.get_services()
-
             try:
-                service = list(
-                    filter(lambda x: x["name"] == data["svc_name"], services)
-                )[0]
-            except IndexError:
+                service = psutil.win_service_get(data["svc_name"])
+            except psutil.NoSuchProcess:
                 exists = False
                 self.logger.error(f"Service {data['svc_name']} does not exist")
 
-            if exists:
-                service_status = service["status"]
-
-                if service_status == "running":
-                    status = "passing"
-
-                elif (
-                    service_status == "start_pending" and data["pass_if_start_pending"]
-                ):
-                    status = "passing"
-
-                else:
-                    status = "failing"
-
-                    if data["restart_if_stopped"]:
-                        ret = self.salt_call_ret_bool(
-                            cmd="service.restart", args=[data["svc_name"]], timeout=60,
-                        )
-                        # wait a bit to give service time to start before checking status again
-                        await asyncio.sleep(10)
-                        reloaded = self.get_services()
-                        stat = list(
-                            filter(lambda x: x["name"] == data["svc_name"], reloaded)
-                        )[0]["status"]
-
-                        if stat == "running":
-                            status = "passing"
-                        elif stat == "start_pending" and data["pass_if_start_pending"]:
-                            status = "passing"
-                        else:
-                            status = "failing"
-
-                        service_status = stat
-            else:
-                status = "failing"
-
             payload = {
-                "status": status,
-                "more_info": f"Status {service_status.upper()}"
-                if exists
-                else f"Service {data['svc_name']} does not exist",
+                "id": data["id"],
+                "status": service.status() if exists else "n/a",
+                "exists": exists,
             }
-
             self.logger.debug(payload)
 
-            resp = requests.patch(
-                f"{self.astor.server}/api/v1/{data['id']}/checkrunner/",
+            status = requests.patch(
+                f"{self.astor.server}/api/v2/checkrunner/",
                 json.dumps(payload),
                 headers=self.headers,
-                timeout=15,
-            )
+                timeout=70,
+            ).json()
+            self.logger.debug(status)
 
-            if (
-                status == "failing"
-                and data["assigned_task"]
-                and data["assigned_task"]["enabled"]
-            ):
-                from taskrunner import TaskRunner
+            if status == "failing" and data["assigned_tasks"]:
+                self.logger.debug(data["assigned_tasks"])
+                for task in data["assigned_tasks"]:
+                    if task["enabled"]:
+                        from taskrunner import TaskRunner
 
-                task = TaskRunner(
-                    task_pk=data["assigned_task"]["id"],
-                    log_level=self.log_level,
-                    log_to=self.log_to,
-                )
-                await task.run_while_in_event_loop()
+                        self.logger.debug(task)
+                        t = TaskRunner(
+                            task_pk=task["id"],
+                            log_level=self.log_level,
+                            log_to=self.log_to,
+                        )
+                        await t.run_while_in_event_loop()
 
             return status
         except Exception as e:
@@ -432,15 +447,7 @@ class WindowsAgent:
             log = []
 
             api_log_name = data["log_name"]
-            api_event_id = int(data["event_id"])
-            api_event_type = data["event_type"]
-            api_fail_when = data["fail_when"]
             api_search_last_days = int(data["search_last_days"])
-
-            try:
-                api_event_id_is_wildcard = data["event_id_is_wildcard"]
-            except KeyError:
-                api_event_id_is_wildcard = False
 
             if api_search_last_days != 0:
                 start_time = dt.datetime.now() - dt.timedelta(days=api_search_last_days)
@@ -506,64 +513,35 @@ class WindowsAgent:
                         "record": record,
                         "uid": uid,
                     }
-
-                    if api_event_id_is_wildcard and evt_type == api_event_type:
-                        log.append(event_dict)
-
-                    elif int(evt_id) == api_event_id and evt_type == api_event_type:
-                        log.append(event_dict)
+                    log.append(event_dict)
 
                 if done:
                     break
 
             win32evtlog.CloseEventLog(hand)
+            payload = {"id": data["id"], "log": self._compress_json(log)}
 
-            if api_fail_when == "contains":
-                if log:
-                    status = "failing"
-                    more_info = {"log": log}
-                else:
-                    status = "passing"
-                    more_info = {"log": []}
-
-            elif api_fail_when == "not_contains":
-                if log:
-                    status = "passing"
-                    more_info = {"log": log}
-                else:
-                    status = "failing"
-                    more_info = {"log": []}
-            else:
-                status = "failing"
-                more_info = {"log": []}
-
-            payload = {
-                "status": status,
-                "extra_details": more_info,
-            }
-
-            self.logger.debug(payload)
-
-            resp = requests.patch(
-                f"{self.astor.server}/api/v1/{data['id']}/checkrunner/",
+            status = requests.patch(
+                f"{self.astor.server}/api/v2/checkrunner/",
                 json.dumps(payload),
                 headers=self.headers,
-                timeout=15,
-            )
+                timeout=45,
+            ).json()
+            self.logger.debug(status)
 
-            if (
-                status == "failing"
-                and data["assigned_task"]
-                and data["assigned_task"]["enabled"]
-            ):
-                from taskrunner import TaskRunner
+            if status == "failing" and data["assigned_tasks"]:
+                self.logger.debug(data["assigned_tasks"])
+                for task in data["assigned_tasks"]:
+                    if task["enabled"]:
+                        from taskrunner import TaskRunner
 
-                task = TaskRunner(
-                    task_pk=data["assigned_task"]["id"],
-                    log_level=self.log_level,
-                    log_to=self.log_to,
-                )
-                await task.run_while_in_event_loop()
+                        self.logger.debug(task)
+                        t = TaskRunner(
+                            task_pk=task["id"],
+                            log_level=self.log_level,
+                            log_to=self.log_to,
+                        )
+                        await t.run_while_in_event_loop()
 
             return status
         except Exception as e:
@@ -768,11 +746,46 @@ class WindowsAgent:
         else:
             return ver
 
+    def wait_for_service(self, svc, status, retries=10):
+        attempts = 0
+
+        while 1:
+            try:
+                service = psutil.win_service_get(svc)
+            except psutil.NoSuchProcess:
+                attempts += 1
+                sleep(5)
+            else:
+                stat = service.status()
+                if stat != status:
+                    attempts += 1
+                    sleep(5)
+                else:
+                    attempts = 0
+
+            if attempts == 0 or attempts >= retries:
+                break
+
+    def force_kill_salt(self):
+        pids = []
+        for proc in psutil.process_iter():
+            with proc.oneshot():
+                if proc.name().lower() == "python.exe" and "salt" in proc.exe():
+                    pids.append(proc.pid)
+
+        for pid in pids:
+            try:
+                self.logger.debug(f"killing proc with pid {pid}")
+                kill_proc(pid)
+            except:
+                continue
+
     def update_salt(self):
         try:
-            salt_info = f"{self.astor.server}/api/v1/{self.astor.agentpk}/saltinfo/"
-            r = requests.get(salt_info, headers=self.headers, timeout=15)
+            get = f"{self.astor.server}/api/v2/{self.astor.agentid}/saltminion/"
+            r = requests.get(get, headers=self.headers, timeout=15)
             if r.status_code != 200:
+                self.logger.error(r.status_code)
                 return
 
             try:
@@ -789,16 +802,28 @@ class WindowsAgent:
                 return
 
             if latest_ver == installed_ver:
+                self.logger.debug(
+                    f"Latest version {latest_ver} is same as installed version {installed_ver}. Skipping."
+                )
                 return
 
             self.logger.info("Updating salt")
 
-            get_minion = requests.get(self.salt_minion_exe, stream=True, timeout=900)
+            try:
+                get_minion = requests.get(
+                    self.salt_minion_exe, stream=True, timeout=900
+                )
+            except Exception as e:
+                self.logger.error(e)
+                return
+
             if get_minion.status_code != 200:
-                self.logger.error("Unable to download salt-minion. Aborting")
+                self.logger.error(
+                    f"{get_minion.status_code}: Unable to download salt-minion. Aborting"
+                )
                 return False
 
-            minion_file = os.path.join(self.programdir, "salt-minion-setup.exe")
+            minion_file = os.path.join(self.programdir, self.salt_installer)
             if os.path.exists(minion_file):
                 os.remove(minion_file)
 
@@ -810,34 +835,57 @@ class WindowsAgent:
 
             del get_minion
 
-            p_stop = subprocess.run(
+            subprocess.run(
                 [self.nssm, "stop", "checkrunner"], capture_output=True, timeout=60
             )
 
-            r = subprocess.run(
-                [
-                    "salt-minion-setup.exe",
-                    "/S",
-                    "/custom-config=saltcustom",
-                    f"/master={self.astor.salt_master}",
-                    f"/minion-name={salt_id}",
-                    "/start-minion=1",
-                ],
-                cwd=self.programdir,
-                capture_output=True,
-                shell=True,
-                timeout=30,
+            self.logger.debug("stopping salt-minion")
+            subprocess.run(
+                [self.nssm, "stop", "salt-minion"], capture_output=True, timeout=60
             )
-            sleep(60)
+            self.wait_for_service(svc="salt-minion", status="stopped", retries=15)
+            self.logger.debug("salt svc was stopped")
 
-            p_start = subprocess.run(
+            self.force_kill_salt()
+
+            salt_cmd = [
+                self.salt_installer,
+                "/S",
+                "/custom-config=saltcustom",
+                f"/master={self.astor.salt_master}",
+                f"/minion-name={salt_id}",
+                "/start-minion=1",
+            ]
+
+            self.logger.debug("running salt update command")
+            try:
+                r = subprocess.run(
+                    salt_cmd,
+                    cwd=self.programdir,
+                    capture_output=True,
+                    shell=True,
+                    timeout=300,
+                )
+            except Exception as e:
+                self.logger.error(e)
+                subprocess.run(
+                    [self.nssm, "start", "checkrunner"], capture_output=True, timeout=60
+                )
+                return
+
+            self.logger.debug("waiting for salt to start")
+            self.wait_for_service(svc="salt-minion", status="running")
+            self.logger.debug("salt started")
+
+            subprocess.run(
                 [self.nssm, "start", "checkrunner"], capture_output=True, timeout=60
             )
 
-            payload = {"ver": latest_ver}
-            r = requests.patch(
-                salt_info, json.dumps(payload), headers=self.headers, timeout=30
-            )
+            put = f"{self.astor.server}/api/v2/saltminion/"
+            payload = {"ver": latest_ver, "agent_id": self.astor.agentid}
+            r = requests.put(put, json.dumps(payload), headers=self.headers, timeout=30)
+            if r.status_code != 200:
+                self.logger.error(r.status_code)
 
             self.logger.info(f"Salt was updated from {installed_ver} to {latest_ver}")
         except Exception as e:
@@ -845,24 +893,26 @@ class WindowsAgent:
 
     def recover_salt(self):
         try:
-            ssm = os.path.join("C:\\salt\\bin", "ssm.exe")
             r = subprocess.run(
-                [ssm, "stop", "salt-minion"], capture_output=True, timeout=30
+                [self.nssm, "stop", "salt-minion"], capture_output=True, timeout=30
             )
-            sleep(10)
+
+            self.wait_for_service(svc="salt-minion", status="stopped", retries=15)
             self.fix_salt(by_time=False)
+            self.force_kill_salt()
+
             r = subprocess.run(
                 ["ipconfig", "/flushdns"], capture_output=True, timeout=30
             )
             r = subprocess.run(
-                [ssm, "start", "salt-minion"], capture_output=True, timeout=30
+                [self.nssm, "start", "salt-minion"], capture_output=True, timeout=30
             )
         except Exception as e:
             self.logger.error(e)
 
     def recover_mesh(self):
         self._mesh_service_action("stop")
-        sleep(5)
+        self.wait_for_service(svc="mesh agent", status="stopped", retries=3)
         pids = [
             proc.info
             for proc in psutil.process_iter(attrs=["pid", "name"])
@@ -872,8 +922,8 @@ class WindowsAgent:
         for pid in pids:
             kill_proc(pid["pid"])
 
-        mesh1 = os.path.join("C:\\Program Files\\Mesh Agent", "MeshAgent.exe")
-        mesh2 = os.path.join(self.programdir, "meshagent.exe")
+        mesh1 = os.path.join(os.environ["ProgramFiles"], "Mesh Agent", "MeshAgent.exe")
+        mesh2 = os.path.join(self.programdir, self.mesh_installer)
         if os.path.exists(mesh1):
             exe = mesh1
         else:
@@ -921,14 +971,6 @@ class WindowsAgent:
 
     def cleanup(self):
         self.cleanup_tasks()
-
-        if os.path.exists("C:\\salt"):
-            try:
-                shutil.rmtree("C:\\salt")
-                sleep(1)
-                os.system('rmdir /S /Q "{}"'.format("C:\\salt"))
-            except Exception:
-                pass
 
     def fix_salt(self, by_time=True):
         """
@@ -987,6 +1029,11 @@ class WindowsAgent:
                 self.logger.warning(f"Killing salt pid: {pid}")
                 kill_proc(pid)
 
+    def _compress_json(self, j):
+        return base64.b64encode(
+            zlib.compress(json.dumps(j).encode("utf-8", errors="ignore"))
+        ).decode("ascii", errors="ignore")
+
     def _mesh_service_action(self, action):
         r = subprocess.run(
             ["sc", action, "mesh agent"], capture_output=True, timeout=30
@@ -1016,23 +1063,13 @@ class WindowsAgent:
 
             cpu_usage = proc.cpu_percent(10) / psutil.cpu_count()
 
-            if cpu_usage >= 18.0:
+            if cpu_usage >= 15.0:
                 self.logger.warning(
                     f"Mesh agent cpu usage: {cpu_usage}%. Restarting..."
                 )
+
                 self._mesh_service_action("stop")
-
-                attempts = 0
-                while 1:
-                    svc = psutil.win_service_get("mesh agent")
-                    if svc.status() != "stopped":
-                        attempts += 1
-                        sleep(1)
-                    else:
-                        attempts = 0
-
-                    if attempts == 0 or attempts >= 30:
-                        break
+                self.wait_for_service(svc="mesh agent", status="stopped", retries=10)
 
                 # sometimes stopping service doesn't kill the hung proc
                 mesh2 = [
@@ -1102,12 +1139,95 @@ class WindowsAgent:
 
         tasks = [task for task in ret if task.startswith("TacticalRMM_")]
 
-        if tasks:
-            for task in tasks:
-                try:
-                    self.salt_call_ret_bool("task.delete_task", args=[task])
-                except:
-                    pass
+        for task in tasks:
+            try:
+                self.salt_call_ret_bool("task.delete_task", args=[task])
+            except:
+                pass
+
+    def send_system_info(self):
+        class SystemDetail:
+            def __init__(self):
+                c = wmi.WMI()
+                self.comp_sys_prod = c.Win32_ComputerSystemProduct()
+                self.comp_sys = c.Win32_ComputerSystem()
+                self.memory = c.Win32_PhysicalMemory()
+                self.os = c.Win32_OperatingSystem()
+                self.base_board = c.Win32_BaseBoard()
+                self.bios = c.Win32_BIOS()
+                self.disk = c.Win32_DiskDrive()
+                self.network_adapter = c.Win32_NetworkAdapter()
+                self.network_config = c.Win32_NetworkAdapterConfiguration()
+                self.desktop_monitor = c.Win32_DesktopMonitor()
+                self.cpu = c.Win32_Processor()
+                self.usb = c.Win32_USBController()
+
+            def get_all(self, obj):
+                ret = []
+                for i in obj:
+                    tmp = [
+                        {j: getattr(i, j)}
+                        for j in list(i.properties)
+                        if getattr(i, j) is not None
+                    ]
+                    ret.append(tmp)
+
+                return ret
+
+        info = SystemDetail()
+        try:
+            sysinfo = {
+                "comp_sys_prod": info.get_all(info.comp_sys_prod),
+                "comp_sys": info.get_all(info.comp_sys),
+                "mem": info.get_all(info.memory),
+                "os": info.get_all(info.os),
+                "base_board": info.get_all(info.base_board),
+                "bios": info.get_all(info.bios),
+                "disk": info.get_all(info.disk),
+                "network_adapter": info.get_all(info.network_adapter),
+                "network_config": info.get_all(info.network_config),
+                "desktop_monitor": info.get_all(info.desktop_monitor),
+                "cpu": info.get_all(info.cpu),
+                "usb": info.get_all(info.usb),
+            }
+
+        except Exception as e:
+            self.logger.debug(e)
+            return
+
+        payload = {"agent_id": self.astor.agentid, "sysinfo": sysinfo}
+        url = f"{self.astor.server}/api/v2/sysinfo/"
+        try:
+            r = requests.patch(
+                url, json.dumps(payload), headers=self.headers, timeout=15
+            )
+        except:
+            pass
+
+    def generate_agent_id(self):
+        rand = "".join(random.choice(string.ascii_letters) for _ in range(35))
+        return f"{rand}-{self.hostname}"
+
+    def uninstall_salt(self):
+        print("Stopping salt-minion service", flush=True)
+        r = subprocess.run(
+            [self.nssm, "stop", "salt-minion"], timeout=45, capture_output=True
+        )
+
+        self.wait_for_service(svc="salt-minion", status="stopped", retries=15)
+
+        # clean up any hung salt python procs
+        self.force_kill_salt()
+
+        print("Uninstalling existing salt-minion", flush=True)
+        salt_uninst = os.path.join(self.system_drive, "\\salt\\uninst.exe")
+        r = subprocess.run(
+            [salt_uninst, "/S"], shell=True, timeout=120, capture_output=True
+        )
+        sleep(30)
+
+        remove_dir(os.path.join(self.system_drive, "\\salt"))
+        print("Salt was removed", flush=True)
 
 
 def show_agent_status(window, gui):

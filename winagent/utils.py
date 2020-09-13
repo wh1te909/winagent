@@ -1,10 +1,10 @@
 import ctypes
+import os
 import re
 import signal
 import subprocess
 import winreg
 from ctypes.wintypes import BYTE, DWORD, WCHAR, WORD
-
 
 import psutil
 import wmi
@@ -73,6 +73,14 @@ def enable_ping():
         capture_output=True,
         shell=True,
     )
+
+
+def remove_dir(folder):
+    if os.path.exists(folder):
+        try:
+            os.system('rmdir /S /Q "{}"'.format(folder))
+        except:
+            pass
 
 
 def bytes2human(n):
