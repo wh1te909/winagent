@@ -1109,7 +1109,7 @@ class WindowsAgent:
 
             cpu_usage = proc.cpu_percent(10) / psutil.cpu_count()
 
-            if cpu_usage >= 18.0:
+            if cpu_usage >= 15.0:
                 self.logger.warning(
                     f"Mesh agent cpu usage: {cpu_usage}%. Restarting..."
                 )
