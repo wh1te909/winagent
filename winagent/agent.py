@@ -798,6 +798,9 @@ class WindowsAgent:
                 return
 
             if latest_ver == installed_ver:
+                self.logger.debug(
+                    f"Latest version {latest_ver} is same as installed version {installed_ver}. Skipping."
+                )
                 return
 
             self.logger.info("Updating salt")
