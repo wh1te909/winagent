@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import datetime as dt
 import json
 import logging
@@ -12,6 +13,7 @@ import socket
 import string
 import subprocess
 import sys
+import zlib
 from collections import defaultdict
 from time import perf_counter, sleep
 
@@ -125,7 +127,6 @@ class WindowsAgent:
         self.logger = logging.getLogger(__name__)
 
     async def script_check(self, data):
-
         try:
             script_path = data["script"]["filepath"]
             shell = data["script"]["shell"]
@@ -186,43 +187,39 @@ class WindowsAgent:
                 stdout = ""
                 stderr = proc_stderr.decode("utf-8", errors="ignore")
 
-            if retcode != 0:
-                status = "failing"
-            else:
-                status = "passing"
-
             payload = {
+                "id": data["id"],
                 "stdout": stdout,
                 "stderr": stderr,
-                "status": status,
                 "retcode": retcode,
-                "execution_time": "{:.4f}".format(stop - start),
+                "stop": stop,
+                "start": start,
             }
-
             self.logger.debug(payload)
 
-            resp = requests.patch(
-                f"{self.astor.server}/api/v1/{data['id']}/checkrunner/",
+            status = requests.patch(
+                f"{self.astor.server}/api/v2/checkrunner/",
                 json.dumps(payload),
                 headers=self.headers,
                 timeout=15,
-            )
+            ).json()
 
-            if (
-                status == "failing"
-                and data["assigned_task"]
-                and data["assigned_task"]["enabled"]
-            ):
-                from taskrunner import TaskRunner
+            if status == "failing" and data["assigned_tasks"]:
+                self.logger.debug(data["assigned_tasks"])
+                for task in data["assigned_tasks"]:
+                    if task["enabled"]:
+                        from taskrunner import TaskRunner
 
-                task = TaskRunner(
-                    task_pk=data["assigned_task"]["id"],
-                    log_level=self.log_level,
-                    log_to=self.log_to,
-                )
-                await task.run_while_in_event_loop()
+                        self.logger.debug(task)
+                        t = TaskRunner(
+                            task_pk=task["id"],
+                            log_level=self.log_level,
+                            log_to=self.log_to,
+                        )
+                        await t.run_while_in_event_loop()
 
             return status
+
         except Exception as e:
             self.logger.debug(e)
             return "failing"
@@ -238,48 +235,48 @@ class WindowsAgent:
 
             stdout, stderr = await r.communicate()
 
-            success = ["Reply", "bytes", "time", "TTL"]
+            has_stdout, has_stderr = False, False
 
             if stdout:
+                has_stdout = True
                 output = stdout.decode("utf-8", errors="ignore")
-                if all(x in output for x in success):
-                    status = "passing"
-                else:
-                    status = "failing"
-
             elif stderr:
-                status = "failing"
+                has_stderr = True
                 output = stderr.decode("utf-8", errors="ignore")
 
             payload = {
-                "status": status,
-                "more_info": output,
+                "id": data["id"],
+                "has_stdout": has_stdout,
+                "has_stderr": has_stderr,
+                "output": output,
             }
 
             self.logger.debug(payload)
 
-            resp = requests.patch(
-                f"{self.astor.server}/api/v1/{data['id']}/checkrunner/",
+            status = requests.patch(
+                f"{self.astor.server}/api/v2/checkrunner/",
                 json.dumps(payload),
                 headers=self.headers,
                 timeout=15,
-            )
+            ).json()
+            self.logger.debug(status)
 
-            if (
-                status == "failing"
-                and data["assigned_task"]
-                and data["assigned_task"]["enabled"]
-            ):
-                from taskrunner import TaskRunner
+            if status == "failing" and data["assigned_tasks"]:
+                self.logger.debug(data["assigned_tasks"])
+                for task in data["assigned_tasks"]:
+                    if task["enabled"]:
+                        from taskrunner import TaskRunner
 
-                task = TaskRunner(
-                    task_pk=data["assigned_task"]["id"],
-                    log_level=self.log_level,
-                    log_to=self.log_to,
-                )
-                await task.run_while_in_event_loop()
+                        self.logger.debug(task)
+                        t = TaskRunner(
+                            task_pk=task["id"],
+                            log_level=self.log_level,
+                            log_to=self.log_to,
+                        )
+                        await t.run_while_in_event_loop()
 
             return status
+
         except Exception as e:
             self.logger.debug(e)
             return "failing"
@@ -291,167 +288,150 @@ class WindowsAgent:
             exists = False
             self.logger.error(f"Disk {data['disk']} does not exist")
 
-        if exists:
-            percent_used = round(disk.percent)
-            total = bytes2human(disk.total)
-            free = bytes2human(disk.free)
-
-            if (100 - percent_used) < data["threshold"]:
-                status = "failing"
-            else:
-                status = "passing"
-
-            more_info = f"Total: {total}B, Free: {free}B"
-        else:
-            status = "failing"
-            more_info = f"Disk {data['disk']} does not exist"
-
         payload = {
-            "status": status,
-            "more_info": more_info,
+            "id": data["id"],
+            "percent_used": disk.percent,
+            "total": disk.total,
+            "free": disk.free,
+            "exists": exists,
         }
-
         self.logger.debug(payload)
 
-        resp = requests.patch(
-            f"{self.astor.server}/api/v1/{data['id']}/checkrunner/",
+        status = requests.patch(
+            f"{self.astor.server}/api/v2/checkrunner/",
             json.dumps(payload),
             headers=self.headers,
             timeout=15,
-        )
+        ).json()
+        self.logger.debug(status)
 
-        if (
-            status == "failing"
-            and data["assigned_task"]
-            and data["assigned_task"]["enabled"]
-        ):
-            from taskrunner import TaskRunner
+        if status == "failing" and data["assigned_tasks"]:
+            self.logger.debug(data["assigned_tasks"])
+            for task in data["assigned_tasks"]:
+                if task["enabled"]:
+                    from taskrunner import TaskRunner
 
-            task = TaskRunner(
-                task_pk=data["assigned_task"]["id"],
-                log_level=self.log_level,
-                log_to=self.log_to,
-            )
-            await task.run_while_in_event_loop()
+                    self.logger.debug(task)
+                    t = TaskRunner(
+                        task_pk=task["id"],
+                        log_level=self.log_level,
+                        log_to=self.log_to,
+                    )
+                    await t.run_while_in_event_loop()
 
         return status
 
-    async def cpu_load_check(self, data):
+    async def cpu_load_check(self, data, interval=7):
+        try:
+            interval = int(data["interval"])
+        except:
+            pass
+
         try:
             psutil.cpu_percent(interval=0)
-            await asyncio.sleep(5)
+            await asyncio.sleep(interval)
             cpu_load = round(psutil.cpu_percent(interval=0))
 
-            payload = {"percent": cpu_load}
+            payload = {"percent": cpu_load, "id": data["id"]}
+            self.logger.debug(payload)
 
-            resp = requests.patch(
-                f"{self.astor.server}/api/v1/{data['id']}/checkrunner/",
+            status = requests.patch(
+                f"{self.astor.server}/api/v2/checkrunner/",
                 json.dumps(payload),
                 headers=self.headers,
                 timeout=15,
-            )
+            ).json()
+            self.logger.debug(status)
 
-            return "ok"
+            if status == "failing" and data["assigned_tasks"]:
+                self.logger.debug(data["assigned_tasks"])
+                for task in data["assigned_tasks"]:
+                    if task["enabled"]:
+                        from taskrunner import TaskRunner
+
+                        self.logger.debug(task)
+                        t = TaskRunner(
+                            task_pk=task["id"],
+                            log_level=self.log_level,
+                            log_to=self.log_to,
+                        )
+                        await t.run_while_in_event_loop()
+
+            return status
+
         except Exception as e:
             self.logger.debug(e)
             return False
 
     async def mem_check(self, data):
         try:
+            payload = {"percent": self.get_used_ram(), "id": data["id"]}
+            self.logger.debug(payload)
 
-            payload = {"percent": self.get_used_ram()}
-
-            resp = requests.patch(
-                f"{self.astor.server}/api/v1/{data['id']}/checkrunner/",
+            status = requests.patch(
+                f"{self.astor.server}/api/v2/checkrunner/",
                 json.dumps(payload),
                 headers=self.headers,
                 timeout=15,
-            )
+            ).json()
+            self.logger.debug(status)
 
-            return "ok"
+            if status == "failing" and data["assigned_tasks"]:
+                self.logger.debug(data["assigned_tasks"])
+                for task in data["assigned_tasks"]:
+                    if task["enabled"]:
+                        from taskrunner import TaskRunner
+
+                        self.logger.debug(task)
+                        t = TaskRunner(
+                            task_pk=task["id"],
+                            log_level=self.log_level,
+                            log_to=self.log_to,
+                        )
+                        await t.run_while_in_event_loop()
+
+            return status
+
         except Exception as e:
             self.logger.debug(e)
             return False
 
     async def win_service_check(self, data, exists=True):
         try:
-            services = self.get_services()
-
             try:
-                service = list(
-                    filter(lambda x: x["name"] == data["svc_name"], services)
-                )[0]
-            except IndexError:
+                service = psutil.win_service_get(data["svc_name"])
+            except psutil.NoSuchProcess:
                 exists = False
                 self.logger.error(f"Service {data['svc_name']} does not exist")
 
-            if exists:
-                service_status = service["status"]
-
-                if service_status == "running":
-                    status = "passing"
-
-                elif (
-                    service_status == "start_pending" and data["pass_if_start_pending"]
-                ):
-                    status = "passing"
-
-                else:
-                    status = "failing"
-
-                    if data["restart_if_stopped"]:
-                        ret = self.salt_call_ret_bool(
-                            cmd="service.restart",
-                            args=[data["svc_name"]],
-                            timeout=60,
-                        )
-                        # wait a bit to give service time to start before checking status again
-                        await asyncio.sleep(10)
-                        reloaded = self.get_services()
-                        stat = list(
-                            filter(lambda x: x["name"] == data["svc_name"], reloaded)
-                        )[0]["status"]
-
-                        if stat == "running":
-                            status = "passing"
-                        elif stat == "start_pending" and data["pass_if_start_pending"]:
-                            status = "passing"
-                        else:
-                            status = "failing"
-
-                        service_status = stat
-            else:
-                status = "failing"
-
             payload = {
-                "status": status,
-                "more_info": f"Status {service_status.upper()}"
-                if exists
-                else f"Service {data['svc_name']} does not exist",
+                "id": data["id"],
+                "status": service.status() if exists else "n/a",
+                "exists": exists,
             }
-
             self.logger.debug(payload)
 
-            resp = requests.patch(
-                f"{self.astor.server}/api/v1/{data['id']}/checkrunner/",
+            status = requests.patch(
+                f"{self.astor.server}/api/v2/checkrunner/",
                 json.dumps(payload),
                 headers=self.headers,
-                timeout=15,
-            )
+                timeout=70,
+            ).json()
+            self.logger.debug(status)
 
-            if (
-                status == "failing"
-                and data["assigned_task"]
-                and data["assigned_task"]["enabled"]
-            ):
-                from taskrunner import TaskRunner
+            if status == "failing" and data["assigned_tasks"]:
+                self.logger.debug(data["assigned_tasks"])
+                for task in data["assigned_tasks"]:
+                    if task["enabled"]:
+                        from taskrunner import TaskRunner
 
-                task = TaskRunner(
-                    task_pk=data["assigned_task"]["id"],
-                    log_level=self.log_level,
-                    log_to=self.log_to,
-                )
-                await task.run_while_in_event_loop()
+                        self.logger.debug(task)
+                        t = TaskRunner(
+                            task_pk=task["id"],
+                            log_level=self.log_level,
+                            log_to=self.log_to,
+                        )
+                        await t.run_while_in_event_loop()
 
             return status
         except Exception as e:
@@ -463,15 +443,7 @@ class WindowsAgent:
             log = []
 
             api_log_name = data["log_name"]
-            api_event_id = int(data["event_id"])
-            api_event_type = data["event_type"]
-            api_fail_when = data["fail_when"]
             api_search_last_days = int(data["search_last_days"])
-
-            try:
-                api_event_id_is_wildcard = data["event_id_is_wildcard"]
-            except KeyError:
-                api_event_id_is_wildcard = False
 
             if api_search_last_days != 0:
                 start_time = dt.datetime.now() - dt.timedelta(days=api_search_last_days)
@@ -537,64 +509,35 @@ class WindowsAgent:
                         "record": record,
                         "uid": uid,
                     }
-
-                    if api_event_id_is_wildcard and evt_type == api_event_type:
-                        log.append(event_dict)
-
-                    elif int(evt_id) == api_event_id and evt_type == api_event_type:
-                        log.append(event_dict)
+                    log.append(event_dict)
 
                 if done:
                     break
 
             win32evtlog.CloseEventLog(hand)
+            payload = {"id": data["id"], "log": self._compress_json(log)}
 
-            if api_fail_when == "contains":
-                if log:
-                    status = "failing"
-                    more_info = {"log": log}
-                else:
-                    status = "passing"
-                    more_info = {"log": []}
-
-            elif api_fail_when == "not_contains":
-                if log:
-                    status = "passing"
-                    more_info = {"log": log}
-                else:
-                    status = "failing"
-                    more_info = {"log": []}
-            else:
-                status = "failing"
-                more_info = {"log": []}
-
-            payload = {
-                "status": status,
-                "extra_details": more_info,
-            }
-
-            self.logger.debug(payload)
-
-            resp = requests.patch(
-                f"{self.astor.server}/api/v1/{data['id']}/checkrunner/",
+            status = requests.patch(
+                f"{self.astor.server}/api/v2/checkrunner/",
                 json.dumps(payload),
                 headers=self.headers,
-                timeout=15,
-            )
+                timeout=30,
+            ).json()
+            self.logger.debug(status)
 
-            if (
-                status == "failing"
-                and data["assigned_task"]
-                and data["assigned_task"]["enabled"]
-            ):
-                from taskrunner import TaskRunner
+            if status == "failing" and data["assigned_tasks"]:
+                self.logger.debug(data["assigned_tasks"])
+                for task in data["assigned_tasks"]:
+                    if task["enabled"]:
+                        from taskrunner import TaskRunner
 
-                task = TaskRunner(
-                    task_pk=data["assigned_task"]["id"],
-                    log_level=self.log_level,
-                    log_to=self.log_to,
-                )
-                await task.run_while_in_event_loop()
+                        self.logger.debug(task)
+                        t = TaskRunner(
+                            task_pk=task["id"],
+                            log_level=self.log_level,
+                            log_to=self.log_to,
+                        )
+                        await t.run_while_in_event_loop()
 
             return status
         except Exception as e:
@@ -1079,6 +1022,11 @@ class WindowsAgent:
 
                 self.logger.warning(f"Killing salt pid: {pid}")
                 kill_proc(pid)
+
+    def _compress_json(self, j):
+        return base64.b64encode(
+            zlib.compress(json.dumps(j).encode("utf-8", errors="ignore"))
+        ).decode("ascii", errors="ignore")
 
     def _mesh_service_action(self, action):
         r = subprocess.run(
