@@ -964,7 +964,6 @@ class WindowsAgent:
 
     def cleanup(self):
         self.cleanup_tasks()
-        remove_dir(os.path.join(self.system_drive, "\\salt"))
 
     def fix_salt(self, by_time=True):
         """
