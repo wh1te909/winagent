@@ -288,13 +288,17 @@ class WindowsAgent:
             exists = False
             self.logger.error(f"Disk {data['disk']} does not exist")
 
-        payload = {
-            "id": data["id"],
-            "percent_used": disk.percent,
-            "total": disk.total,
-            "free": disk.free,
-            "exists": exists,
-        }
+        if exists:
+            payload = {
+                "id": data["id"],
+                "percent_used": disk.percent,
+                "total": disk.total,
+                "free": disk.free,
+                "exists": exists,
+            }
+        else:
+            payload = {"id": data["id"], "exists": False}
+
         self.logger.debug(payload)
 
         status = requests.patch(
@@ -1063,19 +1067,9 @@ class WindowsAgent:
                 self.logger.warning(
                     f"Mesh agent cpu usage: {cpu_usage}%. Restarting..."
                 )
+
                 self._mesh_service_action("stop")
-
-                attempts = 0
-                while 1:
-                    svc = psutil.win_service_get("mesh agent")
-                    if svc.status() != "stopped":
-                        attempts += 1
-                        sleep(1)
-                    else:
-                        attempts = 0
-
-                    if attempts == 0 or attempts >= 30:
-                        break
+                self.wait_for_service(svc="mesh agent", status="stopped", retries=10)
 
                 # sometimes stopping service doesn't kill the hung proc
                 mesh2 = [
@@ -1145,12 +1139,11 @@ class WindowsAgent:
 
         tasks = [task for task in ret if task.startswith("TacticalRMM_")]
 
-        if tasks:
-            for task in tasks:
-                try:
-                    self.salt_call_ret_bool("task.delete_task", args=[task])
-                except:
-                    pass
+        for task in tasks:
+            try:
+                self.salt_call_ret_bool("task.delete_task", args=[task])
+            except:
+                pass
 
     def send_system_info(self):
         class SystemDetail:
