@@ -521,7 +521,7 @@ class WindowsAgent:
                 f"{self.astor.server}/api/v2/checkrunner/",
                 json.dumps(payload),
                 headers=self.headers,
-                timeout=30,
+                timeout=45,
             ).json()
             self.logger.debug(status)
 
