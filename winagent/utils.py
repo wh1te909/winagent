@@ -1,5 +1,6 @@
 import ctypes
 import os
+import platform
 import re
 import signal
 import subprocess
@@ -94,6 +95,23 @@ def bytes2human(n):
             value = float(n) / prefix[s]
             return "%.1f%s" % (value, s)
     return "%sB" % n
+
+
+def show_version_info():
+    program_dir = os.path.join(os.environ["ProgramFiles"], "TacticalAgent")
+    print("Arch", platform.machine(), flush=True)
+    print("Program Directory", program_dir, flush=True)
+    ver_file = os.path.join(program_dir, "VERSION")
+    if os.path.exists(ver_file):
+        try:
+            with open(ver_file) as f:
+                ver = f.read().strip()
+
+            print(f"Agent version: {ver}", flush=True)
+        except Exception as e:
+            print(f"Error getting version: {e}", flush=True)
+    else:
+        print(f"{ver_file} does not exist. Unable to get version")
 
 
 # source: https://github.com/saltstack/salt/blob/master/salt/grains/core.py

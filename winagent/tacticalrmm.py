@@ -66,15 +66,9 @@ def main():
     args = parser.parse_args()
 
     if args.version:
-        try:
-            with open(
-                os.path.join(os.environ["ProgramFiles"], "TacticalAgent", "VERSION")
-            ) as f:
-                ver = f.read().strip()
+        from utils import show_version_info
 
-            print(ver)
-        except Exception as e:
-            print(f"Error getting version: {e}")
+        show_version_info()
 
     elif args.mode == "install":
 

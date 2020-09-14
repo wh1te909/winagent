@@ -1,5 +1,5 @@
 #define MyAppName "Tactical RMM Agent"
-#define MyAppVersion "0.11.0"
+#define MyAppVersion "0.11.1"
 #define MyAppPublisher "wh1te909"
 #define MyAppURL "https://github.com/wh1te909"
 #define MyAppExeName "tacticalrmm.exe"
@@ -35,12 +35,12 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-Source: "C:\Users\Public\Documents\tacticalagent\VERSION"; DestDir: "{app}"; Flags: ignoreversion;
+Source: "C:\Users\Public\Documents\tacticalagent\VERSION"; DestDir: "{app}"; Flags: ignoreversion; BeforeInstall: StopServices;
 Source: "C:\Users\Public\Documents\tacticalagent\winagent\dist\tacticalrmm\tacticalrmm.exe"; DestDir: "{app}"; Flags: ignoreversion;
 Source: "C:\Users\Public\Documents\tacticalagent\winagent\dist\tacticalrmm\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "C:\Users\Public\Documents\tacticalagent\bin\nssm.exe"; DestDir: "{app}"; Flags: ignoreversion;
 Source: "C:\Users\Public\Documents\tacticalagent\bin\saltcustom"; DestDir: "{app}"; Flags: ignoreversion;
-Source: "C:\Users\Public\Documents\tacticalagent\bin\onit.ico"; DestDir: "{app}"; Flags: ignoreversion;
+Source: "C:\Users\Public\Documents\tacticalagent\bin\onit.ico"; DestDir: "{app}"; Flags: ignoreversion; AfterInstall: StartServices;
 
 [Icons]
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
@@ -60,4 +60,29 @@ Filename: "{app}\{#MESHEXE}"; Parameters: "-fulluninstall"; RunOnceId: "meshrm";
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}";
 Type: filesandordirs; Name: "{#SALTDIR}";
+
+[Code]
+procedure StopServices();
+var
+  ResultCode: Integer;
+  StopTactical: string;
+  StopCheckrunner: string;
+begin
+  StopTactical := ExpandConstant(' /c "{app}\{#NSSM}"' + ' stop tacticalagent && ping 127.0.0.1 -n 5');
+  StopCheckrunner := ExpandConstant(' /c "{app}\{#NSSM}"' + ' stop checkrunner && ping 127.0.0.1 -n 5');
+  Exec('cmd.exe', StopTactical, '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Exec('cmd.exe', StopCheckrunner, '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+end;
+
+procedure StartServices();
+var
+  ResultCode: Integer;
+  StartTactical: string;
+  StartCheckrunner: string;
+begin
+  StartTactical := ExpandConstant(' /c "{app}\{#NSSM}"' + ' start tacticalagent && ping 127.0.0.1 -n 2');
+  StartCheckrunner := ExpandConstant(' /c "{app}\{#NSSM}"' + ' start checkrunner && ping 127.0.0.1 -n 2');
+  Exec('cmd.exe', StartTactical, '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Exec('cmd.exe', StartCheckrunner, '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+end;
 
