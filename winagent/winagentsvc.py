@@ -34,7 +34,11 @@ class WinAgentSvc(WindowsAgent):
             self.logger.debug(info)
 
             r = requests.post(
-                self.hello, json.dumps(info), headers=self.headers, timeout=30
+                self.hello,
+                json.dumps(info),
+                headers=self.headers,
+                timeout=30,
+                verify=self.verify,
             )
         except Exception as e:
             self.logger.debug(e)
@@ -61,6 +65,7 @@ class WinAgentSvc(WindowsAgent):
                     json.dumps(payload),
                     headers=self.headers,
                     timeout=30,
+                    verify=self.verify,
                 )
 
                 if isinstance(r.json(), dict) and "recovery" in r.json().keys():

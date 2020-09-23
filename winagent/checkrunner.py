@@ -16,7 +16,9 @@ class CheckRunner(WindowsAgent):
 
     def get_checks(self):
         try:
-            resp = requests.get(self.checkrunner, headers=self.headers, timeout=15)
+            resp = requests.get(
+                self.checkrunner, headers=self.headers, timeout=15, verify=self.verify
+            )
         except Exception as e:
             self.logger.debug(e)
             return False

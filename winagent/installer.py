@@ -30,6 +30,7 @@ class Installer(WindowsAgent):
         auth_token,
         local_salt,
         local_mesh,
+        cert,
         log_level,
         log_to="stdout",
     ):
@@ -47,7 +48,7 @@ class Installer(WindowsAgent):
         self.log_to = log_to
         self.local_salt = local_salt
         self.local_mesh = local_mesh
-        self.mesh_success = True
+        self.cert = cert
 
     def install(self):
         # check for existing installation and exit if found
@@ -156,6 +157,7 @@ class Installer(WindowsAgent):
                     headers=token_headers,
                     stream=True,
                     timeout=90,
+                    verify=self.cert,
                 )
             except Exception as e:
                 self.logger.error(e)
@@ -191,6 +193,7 @@ class Installer(WindowsAgent):
                 json.dumps({"agent_id": self.agent_id}),
                 headers=token_headers,
                 timeout=15,
+                verify=self.cert,
             )
         except Exception as e:
             self.logger.error(e)
@@ -236,6 +239,7 @@ class Installer(WindowsAgent):
                 json.dumps(payload),
                 headers=token_headers,
                 timeout=60,
+                verify=self.cert,
             )
         except Exception as e:
             self.logger.error(e)
@@ -261,6 +265,7 @@ class Installer(WindowsAgent):
                     agentpk=self.agent_pk,
                     salt_master=self.salt_master,
                     salt_id=self.salt_id,
+                    cert=self.cert if self.cert else None,
                 ).save()
         except Exception as e:
             self.logger.error(e)
@@ -341,6 +346,7 @@ class Installer(WindowsAgent):
                     json.dumps(payload),
                     headers=self.headers,
                     timeout=35,
+                    verify=self.cert,
                 )
             except Exception as e:
                 self.logger.debug(e)
@@ -382,6 +388,7 @@ class Installer(WindowsAgent):
                     json.dumps({"agent_id": self.agent_id}),
                     headers=self.headers,
                     timeout=30,
+                    verify=self.cert,
                 )
             except Exception as e:
                 self.logger.debug(e)
