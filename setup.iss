@@ -1,5 +1,5 @@
 #define MyAppName "Tactical RMM Agent"
-#define MyAppVersion "0.11.1"
+#define MyAppVersion "0.11.2"
 #define MyAppPublisher "wh1te909"
 #define MyAppURL "https://github.com/wh1te909"
 #define MyAppExeName "tacticalrmm.exe"
@@ -80,8 +80,8 @@ var
   StartTactical: string;
   StartCheckrunner: string;
 begin
-  StartTactical := ExpandConstant(' /c "{app}\{#NSSM}"' + ' start tacticalagent && ping 127.0.0.1 -n 2');
-  StartCheckrunner := ExpandConstant(' /c "{app}\{#NSSM}"' + ' start checkrunner && ping 127.0.0.1 -n 2');
+  StartTactical := ExpandConstant(' /c "{app}\{#NSSM}"' + ' start tacticalagent && ping 127.0.0.1 -n 7');
+  StartCheckrunner := ExpandConstant(' /c "{app}\{#NSSM}"' + ' start checkrunner && ping 127.0.0.1 -n 3');
   Exec('cmd.exe', StartTactical, '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   Exec('cmd.exe', StartCheckrunner, '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
 end;

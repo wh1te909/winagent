@@ -45,6 +45,7 @@ class WinUpdater(WindowsAgent):
                 data=json.dumps(payload),
                 headers=self.headers,
                 timeout=60,
+                verify=self.verify,
             )
         except Exception as e:
             self.logger.debug(e)
@@ -59,6 +60,7 @@ class WinUpdater(WindowsAgent):
                 data=json.dumps(self.check_payload),
                 headers=self.headers,
                 timeout=30,
+                verify=self.verify,
             )
         except Exception as e:
             self.logger.debug(e)
@@ -91,6 +93,7 @@ class WinUpdater(WindowsAgent):
                             json.dumps(res_payload),
                             headers=self.headers,
                             timeout=30,
+                            verify=self.verify,
                         )
 
                     # trigger a patch scan once all updates finish installing, and check if reboot needed

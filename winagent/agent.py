@@ -26,6 +26,7 @@ import win32evtlog
 import win32evtlogutil
 import winerror
 import wmi
+from playhouse.migrate import SqliteMigrator, migrate
 from win32com.client import GetObject
 
 from utils import (
@@ -48,6 +49,7 @@ class AgentStorage(peewee.Model):
     agentpk = peewee.IntegerField()
     salt_master = peewee.CharField()
     salt_id = peewee.CharField()
+    cert = peewee.CharField(null=True)
 
     class Meta:
         database = db
@@ -60,13 +62,14 @@ class WindowsAgent:
         self.hostname = socket.gethostname()
         self.platform = platform.system().lower()
         self.arch = "64" if platform.machine().endswith("64") else "32"
-        self.load_db()
         self.programdir = os.path.join(os.environ["ProgramFiles"], "TacticalAgent")
         self.exe = os.path.join(self.programdir, "tacticalrmm.exe")
         self.system_drive = os.environ["SystemDrive"]
         self.salt_call = os.path.join(self.system_drive, "\\salt\\salt-call.bat")
-        self.setup_logging()
+        self.verify = None
         self.version = self.get_agent_version()
+        self.setup_logging()
+        self.load_db()
 
     @property
     def salt_minion_exe(self):
@@ -98,7 +101,17 @@ class WindowsAgent:
 
     def load_db(self):
         if os.path.exists(db_path):
-            self.astor = self.get_db()
+            try:
+                self.astor = self.get_db()
+                self.verify = self.astor.cert
+            except:
+                self.logger.info("Migrating DB")
+                cert = peewee.CharField(null=True)
+                migrator = SqliteMigrator(db)
+                migrate(migrator.add_column("agentstorage", "cert", cert))
+                self.load_db()
+                return
+
             self.headers = {
                 "content-type": "application/json",
                 "Authorization": f"Token {self.astor.token}",
@@ -202,6 +215,7 @@ class WindowsAgent:
                 json.dumps(payload),
                 headers=self.headers,
                 timeout=15,
+                verify=self.verify,
             ).json()
 
             if status == "failing" and data["assigned_tasks"]:
@@ -258,6 +272,7 @@ class WindowsAgent:
                 json.dumps(payload),
                 headers=self.headers,
                 timeout=15,
+                verify=self.verify,
             ).json()
             self.logger.debug(status)
 
@@ -306,6 +321,7 @@ class WindowsAgent:
             json.dumps(payload),
             headers=self.headers,
             timeout=15,
+            verify=self.verify,
         ).json()
         self.logger.debug(status)
 
@@ -344,6 +360,7 @@ class WindowsAgent:
                 json.dumps(payload),
                 headers=self.headers,
                 timeout=15,
+                verify=self.verify,
             ).json()
             self.logger.debug(status)
 
@@ -377,6 +394,7 @@ class WindowsAgent:
                 json.dumps(payload),
                 headers=self.headers,
                 timeout=15,
+                verify=self.verify,
             ).json()
             self.logger.debug(status)
 
@@ -420,6 +438,7 @@ class WindowsAgent:
                 json.dumps(payload),
                 headers=self.headers,
                 timeout=70,
+                verify=self.verify,
             ).json()
             self.logger.debug(status)
 
@@ -526,6 +545,7 @@ class WindowsAgent:
                 json.dumps(payload),
                 headers=self.headers,
                 timeout=45,
+                verify=self.verify,
             ).json()
             self.logger.debug(status)
 
@@ -783,7 +803,7 @@ class WindowsAgent:
     def update_salt(self):
         try:
             get = f"{self.astor.server}/api/v2/{self.astor.agentid}/saltminion/"
-            r = requests.get(get, headers=self.headers, timeout=15)
+            r = requests.get(get, headers=self.headers, timeout=15, verify=self.verify)
             if r.status_code != 200:
                 self.logger.error(r.status_code)
                 return
@@ -883,7 +903,13 @@ class WindowsAgent:
 
             put = f"{self.astor.server}/api/v2/saltminion/"
             payload = {"ver": latest_ver, "agent_id": self.astor.agentid}
-            r = requests.put(put, json.dumps(payload), headers=self.headers, timeout=30)
+            r = requests.put(
+                put,
+                json.dumps(payload),
+                headers=self.headers,
+                timeout=30,
+                verify=self.verify,
+            )
             if r.status_code != 200:
                 self.logger.error(r.status_code)
 
@@ -941,7 +967,9 @@ class WindowsAgent:
 
         try:
             mesh_info = f"{self.astor.server}/api/v1/{self.astor.agentpk}/meshinfo/"
-            resp = requests.get(mesh_info, headers=self.headers, timeout=15)
+            resp = requests.get(
+                mesh_info, headers=self.headers, timeout=15, verify=self.verify
+            )
         except Exception:
             self._mesh_service_action("start")
             return
@@ -950,7 +978,11 @@ class WindowsAgent:
             if node_hex != resp.json():
                 payload = {"nodeidhex": node_hex}
                 requests.patch(
-                    mesh_info, json.dumps(payload), headers=self.headers, timeout=15
+                    mesh_info,
+                    json.dumps(payload),
+                    headers=self.headers,
+                    timeout=15,
+                    verify=self.verify,
                 )
 
         self._mesh_service_action("start")
@@ -1199,7 +1231,11 @@ class WindowsAgent:
         url = f"{self.astor.server}/api/v2/sysinfo/"
         try:
             r = requests.patch(
-                url, json.dumps(payload), headers=self.headers, timeout=15
+                url,
+                json.dumps(payload),
+                headers=self.headers,
+                timeout=15,
+                verify=self.verify,
             )
         except:
             pass

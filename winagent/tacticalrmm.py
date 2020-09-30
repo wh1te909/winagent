@@ -12,6 +12,7 @@ def main():
     parser.add_argument("--api", action="store", dest="api_url", type=str)
     parser.add_argument("--client-id", action="store", dest="client_id", type=int)
     parser.add_argument("--site-id", action="store", dest="site_id", type=int)
+    parser.add_argument("--timeout", action="store", dest="cmd_timeout", type=int)
     parser.add_argument(
         "--desc",
         action="store",
@@ -62,6 +63,13 @@ def main():
         dest="local_mesh",
         type=str,
         help=r'The full path to the Mesh Agent executable e.g. "C:\\temp\\meshagent.exe"',
+    )
+    parser.add_argument(
+        "--cert",
+        action="store",
+        dest="cert",
+        type=str,
+        help=r'The full path to the local cert e.g. "C:\\temp\\ca.pem"',
     )
     args = parser.parse_args()
 
@@ -121,6 +129,26 @@ def main():
                 print("", flush=True)
                 sys.exit(1)
 
+        if args.cert:
+            if not os.path.exists(args.cert):
+                parser.print_help()
+                sys.stdout.flush()
+                print(f"\nError: {args.cert} does not exist\n", flush=True)
+                sys.exit(1)
+            if not os.path.isfile(args.cert):
+                parser.print_help()
+                sys.stdout.flush()
+                print(
+                    f"\nError: {args.cert} must be a file, not a folder.",
+                    flush=True,
+                )
+                print(
+                    r'Make sure to use double backslashes for file paths, and double quotes e.g. "C:\\temp\\ca.pem"',
+                    flush=True,
+                )
+                print("", flush=True)
+                sys.exit(1)
+
         from installer import Installer
 
         installer = Installer(
@@ -136,6 +164,8 @@ def main():
             log_level=args.log_level,
             local_salt=args.local_salt,
             local_mesh=args.local_mesh,
+            cert=args.cert,
+            cmd_timeout=args.cmd_timeout,
         )
 
         installer.install()

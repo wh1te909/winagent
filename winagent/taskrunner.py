@@ -32,7 +32,9 @@ class TaskRunner(WindowsAgent):
 
     def get_task(self):
         try:
-            resp = requests.get(self.task_url, headers=self.headers, timeout=15)
+            resp = requests.get(
+                self.task_url, headers=self.headers, timeout=15, verify=self.verify
+            )
         except Exception as e:
             self.logger.debug(e)
             return False
@@ -113,6 +115,7 @@ class TaskRunner(WindowsAgent):
                 json.dumps(payload),
                 headers=self.headers,
                 timeout=15,
+                verify=self.verify,
             )
 
         except Exception as e:

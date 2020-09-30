@@ -58,13 +58,15 @@ class MeshAgent(WindowsAgent):
         if self.mesh_dir:
             remove_dir(self.mesh_dir)
 
-    def install_mesh(self, exe):
+    def install_mesh(self, exe, cmd_timeout):
         attempts = 0
         retries = 5
 
         print("Installing mesh agent", flush=True)
         try:
-            ret = subprocess.run([exe, "-fullinstall"], capture_output=True, timeout=60)
+            ret = subprocess.run(
+                [exe, "-fullinstall"], capture_output=True, timeout=cmd_timeout
+            )
         except Exception as e:
             self.logger.error(e)
             sys.stdout.flush()
