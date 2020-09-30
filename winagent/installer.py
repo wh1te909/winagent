@@ -31,6 +31,7 @@ class Installer(WindowsAgent):
         local_salt,
         local_mesh,
         cert,
+        cmd_timeout,
         log_level,
         log_to="stdout",
     ):
@@ -49,6 +50,7 @@ class Installer(WindowsAgent):
         self.local_salt = local_salt
         self.local_mesh = local_mesh
         self.cert = cert
+        self.cmd_timeout = cmd_timeout if cmd_timeout else 900
 
     def install(self):
         # check for existing installation and exit if found
@@ -214,7 +216,9 @@ class Installer(WindowsAgent):
             meshAgent.remove_mesh(exe=mesh)
 
         # install mesh
-        self.mesh_node_id = meshAgent.install_mesh(exe=mesh)
+        self.mesh_node_id = meshAgent.install_mesh(
+            exe=mesh, cmd_timeout=self.cmd_timeout
+        )
 
         self.logger.debug(f"{self.mesh_node_id=}")
         sys.stdout.flush()
@@ -296,7 +300,7 @@ class Installer(WindowsAgent):
 
         try:
             install_salt = subprocess.run(
-                salt_cmd, cwd=self.programdir, shell=True, timeout=300
+                salt_cmd, cwd=self.programdir, shell=True, timeout=self.cmd_timeout
             )
         except Exception as e:
             self.logger.error(e)

@@ -12,6 +12,7 @@ def main():
     parser.add_argument("--api", action="store", dest="api_url", type=str)
     parser.add_argument("--client-id", action="store", dest="client_id", type=int)
     parser.add_argument("--site-id", action="store", dest="site_id", type=int)
+    parser.add_argument("--timeout", action="store", dest="cmd_timeout", type=int)
     parser.add_argument(
         "--desc",
         action="store",
@@ -164,6 +165,7 @@ def main():
             local_salt=args.local_salt,
             local_mesh=args.local_mesh,
             cert=args.cert,
+            cmd_timeout=args.cmd_timeout,
         )
 
         installer.install()
