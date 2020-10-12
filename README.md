@@ -1,4 +1,6 @@
-# Tactical RMM Windows Agent
+## THIS HAS BEEN REPLACED BY THE NEW CROSS-PLATFORM [GOLANG AGENT](https://github.com/wh1te909/rmmagent)
+
+### Tactical RMM Windows Agent
 
 [![Build Status](https://travis-ci.com/wh1te909/winagent.svg?branch=master)](https://travis-ci.com/wh1te909/winagent)
 [![Build Status](https://dev.azure.com/dcparsi/winagent/_apis/build/status/wh1te909.winagent?branchName=master)](https://dev.azure.com/dcparsi/winagent/_build/latest?definitionId=3&branchName=master)
